@@ -1,0 +1,67 @@
+name: Build and release Witchboard EQ
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Install ARM toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zip unzip
+          curl --fail --location --retry 3 \
+            --output "${RUNNER_TEMP}/arm-gnu-toolchain.tar.xz" \
+            "https://gitlab.arm.com/api/v4/projects/tooling%2Fgnu-toolchains-for-arm/packages/generic/gnu-toolchain/15.3.rel1/arm-gnu-toolchain-15.3.rel1-x86_64-arm-none-eabi.tar.xz"
+          echo "563bebb2b97d53382b956d6ee1fe61e2cae26699901417234a37df505ef9b5fa  ${RUNNER_TEMP}/arm-gnu-toolchain.tar.xz" | sha256sum --check
+          mkdir -p "${RUNNER_TEMP}/arm-gnu-toolchain"
+          tar --extract --xz \
+            --file "${RUNNER_TEMP}/arm-gnu-toolchain.tar.xz" \
+            --directory "${RUNNER_TEMP}/arm-gnu-toolchain" \
+            --strip-components 1
+          echo "${RUNNER_TEMP}/arm-gnu-toolchain/bin" >> "${GITHUB_PATH}"
+
+      - name: Fetch disting NT API
+        run: |
+          git clone --depth 1 https://github.com/expertsleepersltd/distingNT_API.git ../distingNT_API
+
+      - name: Show tool versions
+        run: |
+          c++ --version
+          arm-none-eabi-c++ --version
+          arm-none-eabi-nm --version
+          arm-none-eabi-readelf --version
+
+      - name: Test, build, inspect, and package Witchboard EQ
+        run: |
+          make clean
+          make package
+          ls -la release
+          sha256sum release/*
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            release/Witchboard-EQ.o \
+            release/Witchboard-EQ.zip \
+            --verify-tag \
+            --title "Witchboard EQ ${GITHUB_REF_NAME}" \
+            --latest \
+            --generate-notes

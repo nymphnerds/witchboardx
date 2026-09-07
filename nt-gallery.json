@@ -1,0 +1,16 @@
+{
+  "name": "Witchboard EQ",
+  "type": "cpp",
+  "pluginType": "CPP",
+  "guid": "WtEQ",
+  "isCollection": false,
+  "collectionGuids": [],
+  "version": "0.1.0",
+  "category": "Utilities",
+  "minimumFirmware": "1.17.0",
+  "description": "A Witchboard experiment with precise sidechain gain shaping, master DJ filtering, bypass routing, 3-band parametric master EQ, and final master insert routing.",
+  "releaseAssets": [
+    "Witchboard-EQ.o",
+    "Witchboard-EQ.zip"
+  ]
+}

@@ -1,0 +1,22 @@
+# Local editor and OS files
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Build scratch files
+build/
+release/
+tmp/
+*.elf
+*.map
+*.o
+
+# Python caches and Windows download metadata
+__pycache__/
+*.py[cod]
+*:Zone.Identifier
+
+# Local build configuration
+.env
+.env.*
