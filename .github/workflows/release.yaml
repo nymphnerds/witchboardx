@@ -1,4 +1,4 @@
-name: Build and release Witchboard EQ
+name: Build and release Witchboard
 
 on:
   push:
@@ -23,21 +23,14 @@ jobs:
       - name: Install ARM toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y zip unzip
-          curl --fail --location --retry 3 \
-            --output "${RUNNER_TEMP}/arm-gnu-toolchain.tar.xz" \
-            "https://gitlab.arm.com/api/v4/projects/tooling%2Fgnu-toolchains-for-arm/packages/generic/gnu-toolchain/15.3.rel1/arm-gnu-toolchain-15.3.rel1-x86_64-arm-none-eabi.tar.xz"
-          echo "563bebb2b97d53382b956d6ee1fe61e2cae26699901417234a37df505ef9b5fa  ${RUNNER_TEMP}/arm-gnu-toolchain.tar.xz" | sha256sum --check
-          mkdir -p "${RUNNER_TEMP}/arm-gnu-toolchain"
-          tar --extract --xz \
-            --file "${RUNNER_TEMP}/arm-gnu-toolchain.tar.xz" \
-            --directory "${RUNNER_TEMP}/arm-gnu-toolchain" \
-            --strip-components 1
-          echo "${RUNNER_TEMP}/arm-gnu-toolchain/bin" >> "${GITHUB_PATH}"
+          sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi libstdc++-arm-none-eabi-dev zip unzip
 
-      - name: Fetch disting NT API
+      - name: Fetch verified disting NT API
         run: |
-          git clone --depth 1 https://github.com/expertsleepersltd/distingNT_API.git ../distingNT_API
+          git init ../distingNT_API
+          git -C ../distingNT_API remote add origin https://github.com/expertsleepersltd/distingNT_API.git
+          git -C ../distingNT_API fetch --depth 1 origin 5a4910d1d4233180114d6aee5ddaa4b8aec577e8
+          git -C ../distingNT_API checkout --detach FETCH_HEAD
 
       - name: Show tool versions
         run: |
@@ -46,7 +39,7 @@ jobs:
           arm-none-eabi-nm --version
           arm-none-eabi-readelf --version
 
-      - name: Test, build, inspect, and package Witchboard EQ
+      - name: Test, build, inspect, and package Witchboard
         run: |
           make clean
           make package
@@ -59,9 +52,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "${GITHUB_REF_NAME}" \
-            release/Witchboard-EQ.o \
-            release/Witchboard-EQ.zip \
+            release/WitchboardX.o \
+            release/WitchboardX.zip \
+            release/release.zip \
             --verify-tag \
-            --title "Witchboard EQ ${GITHUB_REF_NAME}" \
+            --title "Witchboard ${GITHUB_REF_NAME}" \
             --latest \
-            --generate-notes
+            --notes-file .github/release-notes.md

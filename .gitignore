@@ -20,3 +20,6 @@ __pycache__/
 # Local build configuration
 .env
 .env.*
+
+# Local preset backup copies
+*.bak

@@ -7,29 +7,10 @@
 
 #include <vector>
 
+#define _DISTINGNT_SERIALISATION_INTERNAL
 #include "../plugins/Witchboard/Witchboard.cpp"
 
-void _NT_jsonStream::openArray() {}
-void _NT_jsonStream::closeArray() {}
-void _NT_jsonStream::openObject() {}
-void _NT_jsonStream::closeObject() {}
-void _NT_jsonStream::addMemberName(const char*) {}
-void _NT_jsonStream::addNumber(int) {}
-void _NT_jsonStream::addNumber(float) {}
-void _NT_jsonStream::addString(const char*) {}
-void _NT_jsonStream::addFourCC(uint32_t) {}
-void _NT_jsonStream::addBoolean(bool) {}
-void _NT_jsonStream::addNull() {}
-
-bool _NT_jsonParse::numberOfArrayElements(int&) { return false; }
-bool _NT_jsonParse::numberOfObjectMembers(int&) { return false; }
-bool _NT_jsonParse::matchName(const char*) { return false; }
-bool _NT_jsonParse::skipMember() { return false; }
-bool _NT_jsonParse::number(int&) { return false; }
-bool _NT_jsonParse::number(float&) { return false; }
-bool _NT_jsonParse::string(const char*&) { return false; }
-bool _NT_jsonParse::boolean(bool&) { return false; }
-bool _NT_jsonParse::null() { return false; }
+#include "NtJsonTestHost.h"
 
 #ifndef WITCHBOARD_TEST_SAMPLE_RATE
 #define WITCHBOARD_TEST_SAMPLE_RATE 48000
@@ -43,6 +24,23 @@ const _NT_globals NT_globals = {
 	.streamSizeBytes = 0,
 	.streamBufferSizeBytes = 0,
 };
+
+// Host setter emulates synchronous parameter notification, including common offset.
+static _NT_algorithm* setterAlgorithm;
+static int setterCalls;
+int32_t NT_algorithmIndex(const _NT_algorithm* algorithm)
+{
+ setterAlgorithm = const_cast<_NT_algorithm*>(algorithm);
+ return 0;
+}
+uint32_t NT_parameterOffset() { return 1; }
+void NT_setParameterFromAudio(uint32_t index, uint32_t parameter, int16_t value)
+{
+ assert(index == 0 && parameter >= 1);
+ ++setterCalls;
+ const_cast<int16_t*>(setterAlgorithm->v)[parameter - 1] = value;
+ parameterChanged(setterAlgorithm, parameter - 1);
+}
 
 _NT_algorithmMemoryPtrs allocateMemory(const _NT_algorithmRequirements& requirements)
 {
@@ -122,8 +120,8 @@ void assertCrossfadeRouting(float fx1Mix, float fx2Mix,
 
 int main()
 {
-	assert(witchboardFactory.guid == NT_MULTICHAR('W', 't', 'E', 'Q'));
-	assert(strcmp(witchboardFactory.name, "Witchboard EQ") == 0);
+	assert(witchboardFactory.guid == NT_MULTICHAR('W', 't', 'b', 'X'));
+	assert(strcmp(witchboardFactory.name, "WitchboardX") == 0);
 	assert(witchboardFactory.parameterChanged == parameterChanged);
 	assert(witchboardFactory.midiMessage == NULL);
 	assert(witchboardFactory.midiRealtime == NULL);
@@ -172,21 +170,21 @@ int main()
 	calculateRequirements(requirements, specs);
 	calculateRequirements(eightChannelRequirements, eightChannelSpecs);
 	calculateRequirements(maxChannelRequirements, maxChannelSpecs);
-	assert(requirements.numParameters == 137);
-	assert(maxChannelRequirements.numParameters == 242);
+	assert(requirements.numParameters == 129);
+	assert(maxChannelRequirements.numParameters == 234);
 	assert(specifications[0].min == 1 && specifications[0].max == 11);
 	for (int channels = 1; channels <= kMaxChannels; ++channels)
 	{
 		const int32_t channelSpecs[] = { channels };
 		_NT_algorithmRequirements channelRequirements = {};
 		calculateRequirements(channelRequirements, channelSpecs);
-		assert(channelRequirements.numParameters == static_cast<uint32_t>(77 + channels * 15));
+		assert(channelRequirements.numParameters == static_cast<uint32_t>(69 + channels * 15));
 		_NT_algorithmMemoryPtrs pageMemory = allocateMemory(channelRequirements);
 		_NT_algorithm* pageAlgorithm = constructWitchboard(pageMemory,channelRequirements,channelSpecs);
 		assert(pageAlgorithm->parameterPages->numPages == static_cast<uint32_t>(5+channels));
-		const _NT_parameterPage& eqPage = pageAlgorithm->parameterPages->pages[4];
-		assert(strcmp(eqPage.name,"Sidechain/Master") == 0 && eqPage.numParams == 27);
-		for (int i = 0; i < 9; ++i) assert(eqPage.params[13+i] == kParamEq1Freq+i);
+		const _NT_parameterPage& masterPage = pageAlgorithm->parameterPages->pages[4];
+		assert(strcmp(masterPage.name,"Sidechain/Master") == 0 && masterPage.numParams == 18);
+		for (int i = 0; i < 18; ++i) assert(masterPage.params[i] == masterPageParams[i]);
 		freeMemory(pageMemory);
 	}
 	const int32_t unsupportedSpecs[] = { 12 };
@@ -248,8 +246,8 @@ int main()
 	assert(parameterUiPrefix(algorithm, channelBase(3) + kChannelInsert2, prefix) == 2);
 	assert(strcmp(prefix, "4:") == 0);
 	assert(parameterUiPrefix(maxAlgorithm,
-		channelBase(10) + kChannelInsert2, prefix) == 3);
-	assert(strcmp(prefix, "11:") == 0);
+		channelBase(9) + kChannelInsert2, prefix) == 3);
+	assert(strcmp(prefix, "10:") == 0);
 	assert(algorithm->parameters[channelBase(0) + kChannelInsert1].unit
 		== kNT_unitEnum);
 	assert(algorithm->parameters[channelBase(0) + kChannelInsert1Slot1].unit
@@ -277,28 +275,13 @@ int main()
 		"Route A output L") == 0);
 	assert(strcmp(algorithm->parameters[kParamFx1L].name, "FX Send 1 L") == 0);
 	assert(strcmp(algorithm->parameters[kParamSidechainMode].name, "Sidechain") == 0);
-	assert(strcmp(algorithm->parameters[kParamSidechainKeyMode].enumStrings[0],
-		"Trigger") == 0);
-	assert(strcmp(algorithm->parameters[kParamSidechainKeyMode].enumStrings[1],
-		"Gate") == 0);
-	assert(strcmp(algorithm->parameters[kParamSidechainKeyMode].enumStrings[2],
-		"Audio") == 0);
-	assert(algorithm->parameters[kParamSidechainKeyMode].max == 2);
-	assert(algorithm->parameters[kParamSidechainDepth].min == 0);
-	assert(algorithm->parameters[kParamSidechainDepth].max == 100);
-	assert(algorithm->parameters[kParamSidechainDepth].def == 90);
-	assert(algorithm->parameters[kParamSidechainAttack].min == 0);
-	assert(algorithm->parameters[kParamSidechainAttack].max == 50);
-	assert(algorithm->parameters[kParamSidechainAttack].def == 0);
-	assert(algorithm->parameters[kParamSidechainRelease].min == 5);
-	assert(algorithm->parameters[kParamSidechainRelease].max == 800);
-	assert(algorithm->parameters[kParamSidechainRelease].def == 120);
-	assert(algorithm->parameters[kParamSidechainReleaseCurve].min == -300);
-	assert(algorithm->parameters[kParamSidechainReleaseCurve].max == 200);
-	assert(algorithm->parameters[kParamSidechainReleaseCurve].def == -120);
-	assert(algorithm->parameters[kParamSidechainMakeup].min == 0);
-	assert(algorithm->parameters[kParamSidechainMakeup].max == 6);
-	assert(algorithm->parameters[kParamSidechainMakeup].def == 2);
+ assert(algorithm->parameters[kParamSidechainDepth].def == 69);
+ assert(algorithm->parameters[kParamSidechainLookahead].max == 100);
+ assert(algorithm->parameters[kParamSidechainLookahead].scaling == kNT_scaling10);
+ assert(algorithm->parameters[kParamBypassOffset].max == 1000);
+ assert(algorithm->parameters[kParamBypassOffset].scaling == kNT_scaling10);
+ assert(algorithm->parameters[kParamSidechainCurve].min == -100);
+ assert(algorithm->parameters[kParamSidechainCurve].max == 100);
 	assert(strcmp(algorithm->parameters[kParamMasterMode].name, "Master output") == 0);
 	assert(strcmp(algorithm->parameters[kParamMasterMode].enumStrings[0], "Split") == 0);
 	assert(strcmp(algorithm->parameters[kParamMasterFilterEnable].name, "Filter enable") == 0);
@@ -308,15 +291,15 @@ int main()
 	assert(strcmp(algorithm->parameters[kParamMasterFilterHpCutoff].name, "HP limit") == 0);
 	assert(algorithm->parameters[kParamMasterFilterHpCutoff].min == 0);
 	assert(algorithm->parameters[kParamMasterFilterHpCutoff].max == 100);
-	assert(algorithm->parameters[kParamMasterFilterHpCutoff].def == 100);
+	assert(algorithm->parameters[kParamMasterFilterHpCutoff].def == 70);
 	assert(strcmp(algorithm->parameters[kParamMasterFilterLpCutoff].name, "LP limit") == 0);
 	assert(algorithm->parameters[kParamMasterFilterLpCutoff].min == 0);
 	assert(algorithm->parameters[kParamMasterFilterLpCutoff].max == 100);
-	assert(algorithm->parameters[kParamMasterFilterLpCutoff].def == 0);
+	assert(algorithm->parameters[kParamMasterFilterLpCutoff].def == 20);
 	assert(strcmp(algorithm->parameters[kParamMasterFilterQ].name, "Filter Q") == 0);
 	assert(algorithm->parameters[kParamMasterFilterQ].min == 0);
 	assert(algorithm->parameters[kParamMasterFilterQ].max == 100);
-	assert(algorithm->parameters[kParamMasterFilterQ].def == 0);
+	assert(algorithm->parameters[kParamMasterFilterQ].def == 10);
 	assert(strcmp(algorithm->parameters[kParamMasterFilterSweep].name, "Filter sweep") == 0);
 	assert(algorithm->parameters[kParamMasterFilterSweep].min == -100);
 	assert(algorithm->parameters[kParamMasterFilterSweep].max == 100);
@@ -329,97 +312,8 @@ int main()
 	for (int p = 0; p < sidechainMasterPage.numParams; ++p)
 		printf("  %u: %s\n", sidechainMasterPage.params[p],
 			algorithm->parameters[sidechainMasterPage.params[p]].name);
-	const uint8_t expectedMasterParams[kMasterPageParams] = {
-		kParamSidechainMode,
-		kParamSidechainKeyInput,
-		kParamSidechainKeyMode,
-		kParamSidechainDepth,
-		kParamSidechainAttack,
-		kParamSidechainRelease,
-		kParamSidechainReleaseCurve,
-		kParamSidechainMakeup,
-		kParamMasterFilterEnable,
-		kParamMasterFilterHpCutoff,
-		kParamMasterFilterLpCutoff,
-		kParamMasterFilterQ,
-		kParamMasterFilterSweep,
-		kParamEq1Freq, kParamEq1Gain, kParamEq1Q,
-		kParamEq2Freq, kParamEq2Gain, kParamEq2Q,
-		kParamEq3Freq, kParamEq3Gain, kParamEq3Q,
-		kParamMasterMode,
-		kParamMasterSendL,
-		kParamMasterSendR,
-		kParamMasterReturnL,
-		kParamMasterReturnR,
-	};
-	for (int p = 0; p < kMasterPageParams; ++p)
-		assert(sidechainMasterPage.params[p] == expectedMasterParams[p]);
-	SidechainRuntime testSidechain = {};
-	const float triggerGain = processSidechain(testSidechain, 5.0f, kKeyTrigger,
-		90, 0, 120, 0);
-	assert(triggerGain > 0.09f);
-	assert(triggerGain < 0.12f);
-
-	SidechainRuntime heldTriggerSidechain = {};
-	const float firstHeldGain = processSidechain(heldTriggerSidechain, 5.0f, kKeyTrigger,
-		100, 0, 5, 0);
-	assert(firstHeldGain < 0.01f);
-	for (int i = 0; i < 300; ++i)
-		processSidechain(heldTriggerSidechain, 5.0f, kKeyTrigger, 100, 0, 5, 0);
-	assert(heldTriggerSidechain.gain > 0.99f);
-	processSidechain(heldTriggerSidechain, 0.0f, kKeyTrigger, 100, 0, 5, 0);
-	assert(processSidechain(heldTriggerSidechain, 5.0f, kKeyTrigger, 100, 0, 5, 0)
-		< 0.01f);
-
-	SidechainRuntime linearCurveSidechain = {};
-	SidechainRuntime holdCurveSidechain = {};
-	processSidechain(linearCurveSidechain, 5.0f, kKeyTrigger, 90, 0, 100, 0);
-	processSidechain(holdCurveSidechain, 5.0f, kKeyTrigger, 90, 0, 100, -200);
-	for (int i = 0; i < 600; ++i)
-	{
-		processSidechain(linearCurveSidechain, 0.0f, kKeyTrigger, 90, 0, 100, 0);
-		processSidechain(holdCurveSidechain, 0.0f, kKeyTrigger, 90, 0, 100, -200);
-	}
-	assert(holdCurveSidechain.gain < linearCurveSidechain.gain);
-
-	for (int depth = 0; depth <= 100; ++depth)
-	{
-		for (int curve = -300; curve <= 200; curve += 25)
-		{
-			SidechainRuntime finiteSidechain = {};
-			const float gain = processSidechain(finiteSidechain, 5.0f, kKeyTrigger,
-				depth, 0, 5, curve);
-			assert(isfinite(gain));
-			assert(gain >= 0.0f && gain <= 1.0f);
-		}
-	}
-
-	SidechainRuntime zeroKeySidechain = {};
-	assertClose(processSidechain(zeroKeySidechain, 0.0f, kKeyTrigger,
-		100, 0, 5, 0), 1.0f);
-	assertClose(processSidechain(zeroKeySidechain, 0.0f, kKeyGate,
-		100, 0, 5, 0), 1.0f);
-
-	SidechainRuntime gateSidechain = {};
-	for (int i = 0; i < 100; ++i)
-		assert(processSidechain(gateSidechain, 5.0f, kKeyGate, 75, 0, 50, 0)
-			< 0.26f);
-	processSidechain(gateSidechain, 0.0f, kKeyGate, 75, 0, 50, 0);
-	for (int i = 0; i < 3000; ++i)
-		processSidechain(gateSidechain, 0.0f, kKeyGate, 75, 0, 50, 0);
-	assert(gateSidechain.gain > 0.99f);
-
-	SidechainRuntime audioSidechain = {};
-	float audioGain = processSidechain(audioSidechain, 0.5f, kKeyAudio, 80, 0, 50, 0);
-	assert(audioGain > 0.59f);
-	assert(audioGain < 0.61f);
-	for (int i = 0; i < 3000; ++i)
-		audioGain = processSidechain(audioSidechain, 0.0f, kKeyAudio, 80, 0, 50, -200);
-	assert(audioGain > 0.60f);
-	assert(audioGain < 1.0f);
-	for (int i = 0; i < 24000; ++i)
-		audioGain = processSidechain(audioSidechain, 0.0f, kKeyAudio, 80, 0, 50, 200);
-	assert(audioGain > 0.99f);
+ for (int p = 0; p < kMasterPageParams; ++p)
+  assert(sidechainMasterPage.params[p] == masterPageParams[p]);
 	assert(parameterString(algorithm, channelBase(0) + kChannelInsert1Slot1, 0, label)
 		== 11);
 	assert(strcmp(label, "Mono Filter") == 0);
@@ -557,11 +451,10 @@ int main()
 	routingValues[kParamMasterMode] = kMasterSplit;
 	routingValues[kParamSidechainMode] = 1;
 	routingValues[kParamSidechainKeyInput] = keyBus;
-	routingValues[kParamSidechainKeyMode] = kKeyTrigger;
+	routingValues[kParamSidechainLookahead] = 0;
+	routingValues[kParamSidechainSmooth] = 0;
 	routingValues[kParamSidechainDepth] = 90;
-	routingValues[kParamSidechainAttack] = 0;
-	routingValues[kParamSidechainRelease] = 120;
-	routingValues[kParamSidechainReleaseCurve] = -120;
+	routingValues[kParamSidechainCurve] = -50;
 	buses.assign(kNT_lastBus * 4, 0.0f);
 	fillBus(buses, 1, 1.0f);
 	fillBus(buses, 2, 2.0f);
@@ -569,8 +462,7 @@ int main()
 	fillBus(buses, routeReturnBus, 10.0f);
 	step(routingAlgorithm, buses.data(), 1);
 	assertBus(buses, bypassBus, 0.0f);
-	assert(busSample(buses, mainBus, 0) > 1.4f);
-	assert(busSample(buses, mainBus, 0) < 1.6f);
+	assertClose(busSample(buses, mainBus, 0), 1.2f);
 	assert(routingWitchboard->sidechain.gain < 1.0f);
 
 	routingValues[kParamSidechainMode] = 0;
@@ -690,7 +582,7 @@ int main()
 		assertClose(routingWitchboard->runtime[0].gain.value, 1.0f);
 	}
 
-	printf("PASS: Witchboard EQ has direct routes, stable rapid switching, triggered gain shaping, master SVF filter, master insert, and repeat protection (SRAM %u/%u/%u/%u, DRAM %u/%u/%u/%u host bytes for 1/4/8/11 channels).\n",
+	printf("PASS: Witchboard v1.37 has direct routes, stable rapid switching, triggered gain shaping, master SVF filter, master insert, and repeat protection (SRAM %u/%u/%u/%u, DRAM %u/%u/%u/%u host bytes for 1/4/8/11 channels).\n",
 		oneChannelRequirements.sram, requirements.sram,
 		eightChannelRequirements.sram, maxChannelRequirements.sram,
 		oneChannelRequirements.dram, requirements.dram,

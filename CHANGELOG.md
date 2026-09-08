@@ -1,6 +1,64 @@
 # Changelog
 
+## v1.37 — eleven channels, output-page alignment and locked defaults
+
+- Support and initially select 11 stereo channels: 234 of 241 parameters, with
+  seven spare. Existing channel and global parameter identities remain intact.
+- Move Bypass Offset to Final Outputs immediately after Bypass R. Retain the
+  stereo delay and auto-follow behaviour, including preset-load protection.
+- Set factory SC Depth to 69% and Curve to +20; retain Sidechain Off, unassigned
+  trigger, 6 ms Lookahead, approximately 300 ms Length and Smooth 4.
+- Set factory Filter Q to 10, LP limit to 20% and HP limit to 70%, without changing
+  ranges or DSP. Existing saved values are preserved.
+- Add four-rate channel-11 Main/Bypass/insert/FX and preset-restoration tests,
+  and extend the preset converter to 11 channels. Hardware loading remains pending.
+
+## v1.34 — trigger ducker and bypass alignment
+
+- Remove all nine master EQ parameters and DSP, and the old sidechain modes,
+  Attack/Hold/Release/Makeup and power-curve implementation.
+- Add a JoyDuck-derived normalized trigger envelope, logarithmic 50–2000 ms
+  length, signed curve, 0–200 ms linear-ramp smoothing and linear VCA depth.
+- Add 0–10 ms Main lookahead and 0–100 ms Bypass Offset with 0.1 ms controls,
+  DRAM stereo rings and 5 ms live tap crossfades in Split/Sum/Insert modes.
+- Keep effective Bypass Offset visible and saved, follow mapped Lookahead,
+  suppress load-time auto-follow and retain manual trim through range clamps.
+- Preserve ten direct channel strips, master filter and final gain. Final
+  parameter count is 219 (69 globals plus 150 channel parameters).
+- Replace old EQ/hold tests with four-rate envelope/delay/routing/load tests;
+  provide a v1.34 preset converter that preserves compatible mappings.
+- Hardware audition remains pending.
+
 ## Unreleased
+
+- Updated sidechain envelope defaults from the user's auditioned preset: Depth
+  80%, Attack 0, Hold 100 ms, Release 140 ms, Curve -200, Makeup 0 dB.
+  Preset contents and default enable/key routing remain unchanged.
+
+- Added SC hold (0–500 ms) between Attack and Release on the master page,
+  stored as the last global parameter; 229 parameters at 10 channels.
+- Trigger/Gate attacks now use smoothstep at every duration, with a 1 ms
+  minimum at Attack 0 and continuous gain on retriggers. No lookahead added.
+- Converted the supplied preset to Attack 0, Hold 143 ms, Release 46 ms and
+  Curve 0, retaining its 75% depth, channel settings and MIDI mappings. These
+  defaults approximate the old 125 BPM envelope; hardware listening is pending.
+- Host tests cover attack shape, Hold timing, retriggers and held gates at
+  32/44.1/48/96 kHz; existing EQ/routing/gain and ARM checks pass.
+
+- Implemented the 10-channel cap and explicit 241-parameter guard; the cap-only
+  build passed host tests and ARM inspection at 227 parameters.
+- Added channel gain up to +6 dB and a final Master Gain (-12 to +6 dB,
+  default 0 dB, 10 ms smoothing). Current total: 228 parameters at 10 channels.
+  Master Gain scales final Main/Bypass outputs, or the return in Insert mode.
+- Aligned `presets/Tricky plastic time.json` for the extra global parameter,
+  preserving channel values, MIDI mappings and names. Presets remain outside ZIPs.
+- Gain/routing tests pass at 32/44.1/48/96 kHz; ARM inspection confirms the seven
+  cold functions remain in DRAM with no new runtime dependencies. Hardware
+  gain/listening verification remains pending. X2Buss and Dynamics3 are not
+  included in this change; the existing filter and three-band EQ remain.
+
+- Hardware smoke check (2026-09-07): user confirmed `WitchboardX.o` loads
+  and seems fine. Full phase-1 acceptance checks are not yet recorded.
 
 - Documented the first Witchboard v1.19 DRAM-placement pass: move cold setup,
   preset and UI functions such as `constructWitchboard()`, `serialise()`,

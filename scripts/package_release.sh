@@ -1,47 +1,35 @@
 #!/usr/bin/env bash
-
 set -euo pipefail
-
 unset CDPATH
 repo_root="$(cd -- "$(dirname -- "$0")/.." && pwd)"
-object="${OBJECT:-$repo_root/plugins/Witchboard-EQ.o}"
+object="${OBJECT:-$repo_root/plugins/WitchboardX.o}"
 release_dir="${RELEASE_DIR:-$repo_root/release}"
-
-case "$object" in
-    /*) ;;
-    *) object="$repo_root/$object" ;;
-esac
-
-case "$release_dir" in
-    /*) ;;
-    *) release_dir="$repo_root/$release_dir" ;;
-esac
-
-staging_dir="$release_dir/staging/witchboard"
-
+case "$object" in /*) ;; *) object="$repo_root/$object" ;; esac
+case "$release_dir" in /*) ;; *) release_dir="$repo_root/$release_dir" ;; esac
 test -f "$object"
-
-rm -rf -- "$release_dir"
+mkdir -p "$release_dir"
+staging_dir="$(mktemp -d "$release_dir/.v137-package.XXXXXX")"
+trap 'rm -rf -- "$staging_dir"' EXIT
 mkdir -p "$staging_dir/programs/plug-ins"
-
-cp "$object" "$staging_dir/programs/plug-ins/Witchboard-EQ.o"
+cp "$object" "$staging_dir/programs/plug-ins/WitchboardX.o"
+cp "$repo_root/scripts/migrate_v134_preset.py" "$staging_dir/"
+mkdir -p "$staging_dir/presets"
+cp "$repo_root/presets/WitchboardX.json" "$staging_dir/presets/"
 printf '%s\n' \
-    "Copy programs/plug-ins/Witchboard-EQ.o to the same path on the disting NT MicroSD card." \
-    "The plug-in appears as 'Witchboard EQ' and uses GUID WtEQ." \
-    "Requires a disting NT firmware version compatible with C++ plugin API v13." \
+    "Witchboard v1.37 - 11 channels, trigger ducker and output latency alignment" \
+    "Copy programs/plug-ins/WitchboardX.o to the same path on the disting NT MicroSD card." \
+    "The plug-in appears as 'WitchboardX' and uses GUID WtbX." \
+    "Requires disting NT v1.19 beta with DRAM cold-code/serialisation support (API v13); beta currently available only via Discord." \
+    "The optional presets/WitchboardX.json example is aligned for 11 channels; its sample files and external hardware are not included." \
+    "Migrate older Witchboard presets before loading: python3 migrate_v134_preset.py old.json new.json" \
+    "Migration preserves channel/routing mappings, removes EQ/old ducker mappings and switches Sidechain off." \
+    "Hardware audition is still required; automated host tests do not certify on-device audio or CPU use." \
     >"$staging_dir/INSTALL.txt"
-
-# Include the copied DSP's attribution in the distributed binary package.
-sed -n '/^MIT License$/,/^\*\//p' "$repo_root/plugins/Witchboard/Witchboard.cpp" \
-    | sed '$d' >"$staging_dir/SIGNALSMITH-LICENSE.txt"
-test -s "$staging_dir/SIGNALSMITH-LICENSE.txt"
-
 (
     cd "$staging_dir"
-    zip -q -r "$release_dir/Witchboard-EQ.zip" programs INSTALL.txt SIGNALSMITH-LICENSE.txt
+    zip -q -r package.zip programs presets INSTALL.txt migrate_v134_preset.py
 )
-
-cp "$object" "$release_dir/Witchboard-EQ.o"
-rm -rf -- "$release_dir/staging"
-
-unzip -l "$release_dir/Witchboard-EQ.zip"
+mv "$staging_dir/package.zip" "$release_dir/WitchboardX.zip"
+cp "$object" "$release_dir/WitchboardX.o"
+cp "$release_dir/WitchboardX.zip" "$release_dir/release.zip"
+unzip -l "$release_dir/WitchboardX.zip"

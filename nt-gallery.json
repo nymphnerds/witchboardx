@@ -1,16 +1,17 @@
 {
-  "name": "Witchboard EQ",
+  "name": "WitchboardX",
   "type": "cpp",
   "pluginType": "CPP",
-  "guid": "WtEQ",
+  "guid": "WtbX",
   "isCollection": false,
   "collectionGuids": [],
-  "version": "0.1.0",
+  "version": "1.37.0",
   "category": "Utilities",
-  "minimumFirmware": "1.17.0",
-  "description": "A Witchboard experiment with precise sidechain gain shaping, master DJ filtering, bypass routing, 3-band parametric master EQ, and final master insert routing.",
+  "minimumFirmware": "1.19.0",
+  "description": "Eleven-channel serial routing mixer with trigger ducking, Main lookahead, automatic Bypass Offset alignment, master DJ filtering and Split/Sum/Insert routing.",
   "releaseAssets": [
-    "Witchboard-EQ.o",
-    "Witchboard-EQ.zip"
+    "WitchboardX.o",
+    "release.zip",
+    "WitchboardX.zip"
   ]
 }

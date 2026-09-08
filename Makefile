@@ -2,7 +2,7 @@
 SHELL := /bin/sh
 .DELETE_ON_ERROR:
 
-NT_API_PATH ?= $(firstword $(wildcard ../distingNT_API ../../distingNT_API) ../distingNT_API)
+NT_API_PATH ?= $(firstword $(wildcard ../distingNT_API-v119 ../distingNT_API ../../distingNT_API) ../distingNT_API)
 INCLUDE_PATH := $(NT_API_PATH)/include
 API_HEADER := $(INCLUDE_PATH)/distingnt/api.h
 
@@ -15,14 +15,14 @@ ARM_SIZE ?= arm-none-eabi-size
 BUILD_DIR := build
 RELEASE_DIR := release
 SOURCE := plugins/Witchboard/Witchboard.cpp
-OUTPUT := plugins/Witchboard-EQ.o
+OUTPUT := plugins/WitchboardX.o
 HOST_TEST := $(BUILD_DIR)/WitchboardCleanTest
 
 HOST_FLAGS := -std=c++11 -O2 -Wall -Wextra -fno-exceptions -fno-rtti
 ARM_ARCH := -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -mthumb
 ARM_FLAGS := -std=c++11 $(ARM_ARCH) -Os -fPIC -fno-rtti -fno-exceptions -Wall
 
-.PHONY: all check-api test test-eq hardware inspect verify package clean
+.PHONY: all check-api test test-gain test-ducker test-channels hardware inspect verify package clean
 
 all: hardware
 
@@ -35,23 +35,40 @@ check-api:
 $(BUILD_DIR):
 	mkdir -p "$@"
 
-$(HOST_TEST): tests/WitchboardCleanTest.cpp $(SOURCE) | check-api $(BUILD_DIR)
+$(HOST_TEST): tests/WitchboardCleanTest.cpp tests/NtJsonTestHost.h $(SOURCE) $(API_HEADER) | check-api $(BUILD_DIR)
 	$(HOST_CXX) $(HOST_FLAGS) -I"$(INCLUDE_PATH)" "$<" -o "$@"
 
-EQ_TESTS := $(foreach rate,32000 44100 48000 96000,$(BUILD_DIR)/WitchboardEqTest-$(rate))
+GAIN_TESTS := $(foreach rate,32000 44100 48000 96000,$(BUILD_DIR)/WitchboardGainTest-$(rate))
 
-$(BUILD_DIR)/WitchboardEqTest-%: tests/WitchboardEqTest.cpp tests/WitchboardCleanTest.cpp $(SOURCE) | check-api $(BUILD_DIR)
+$(BUILD_DIR)/WitchboardGainTest-%: tests/WitchboardGainTest.cpp tests/WitchboardCleanTest.cpp tests/NtJsonTestHost.h $(SOURCE) $(API_HEADER) | check-api $(BUILD_DIR)
 	$(HOST_CXX) $(HOST_FLAGS) -DWITCHBOARD_TEST_SAMPLE_RATE=$* -I"$(INCLUDE_PATH)" "$<" -o "$@"
 
-test-eq: $(EQ_TESTS)
-	@set -e; for test in $(EQ_TESTS); do "$$test"; done
+test-gain: $(GAIN_TESTS)
+	@set -e; for test in $(GAIN_TESTS); do "$$test"; done
 
-test: $(HOST_TEST) test-eq
+DUCKER_TESTS := $(foreach rate,32000 44100 48000 96000,$(BUILD_DIR)/WitchboardDuckerTest-$(rate))
+
+$(BUILD_DIR)/WitchboardDuckerTest-%: tests/WitchboardDuckerTest.cpp tests/WitchboardCleanTest.cpp tests/NtJsonTestHost.h $(SOURCE) $(API_HEADER) | check-api $(BUILD_DIR)
+	$(HOST_CXX) $(HOST_FLAGS) -DWITCHBOARD_TEST_SAMPLE_RATE=$* -I"$(INCLUDE_PATH)" "$<" -o "$@"
+
+test-ducker: $(DUCKER_TESTS)
+	@set -e; for test in $(DUCKER_TESTS); do "$$test"; done
+
+CHANNEL_TESTS := $(foreach rate,32000 44100 48000 96000,$(BUILD_DIR)/WitchboardChannelsTest-$(rate))
+
+$(BUILD_DIR)/WitchboardChannelsTest-%: tests/WitchboardChannelsTest.cpp tests/WitchboardCleanTest.cpp tests/NtJsonTestHost.h $(SOURCE) $(API_HEADER) | check-api $(BUILD_DIR)
+	$(HOST_CXX) $(HOST_FLAGS) -DWITCHBOARD_TEST_SAMPLE_RATE=$* -I"$(INCLUDE_PATH)" "$<" -o "$@"
+
+test-channels: $(CHANNEL_TESTS)
+	@set -e; for test in $(CHANNEL_TESTS); do "$$test"; done
+
+test: $(HOST_TEST) test-gain test-ducker test-channels
 	"$(HOST_TEST)"
+	python3 tests/test_preset_migration.py
 
 hardware: $(OUTPUT)
 
-$(OUTPUT): $(SOURCE) | check-api
+$(OUTPUT): $(SOURCE) $(API_HEADER) | check-api
 	mkdir -p "$(@D)"
 	$(ARM_CXX) $(ARM_FLAGS) -I"$(INCLUDE_PATH)" -c "$<" -o "$@"
 

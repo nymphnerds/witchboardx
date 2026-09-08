@@ -7,6 +7,10 @@
 #include <distingnt/api.h>
 #include <distingnt/serialisation.h>
 
+#ifndef _NT_DRAM_SECTION
+#error "Witchboard requires the v1.19 DRAM-placement API; set NT_API_PATH to an updated checkout"
+#endif
+
 namespace
 {
 
@@ -51,13 +55,6 @@ enum MasterMode
 	kMasterInsert,
 };
 
-enum KeyMode
-{
-	kKeyTrigger,
-	kKeyGate,
-	kKeyAudio,
-};
-
 enum MasterFilterMode
 {
 	kFilterLowpass,
@@ -87,13 +84,12 @@ constexpr int kParamFx2ReturnPath = kParamMainL + 17;
 constexpr int kParamRepeatProtection = kParamFx2ReturnPath + 1;
 constexpr int kParamSidechainMode = kParamRepeatProtection + 1;
 constexpr int kParamSidechainKeyInput = kParamSidechainMode + 1;
-constexpr int kParamSidechainKeyMode = kParamSidechainMode + 2;
-constexpr int kParamSidechainDepth = kParamSidechainMode + 3;
-constexpr int kParamSidechainAttack = kParamSidechainMode + 4;
-constexpr int kParamSidechainRelease = kParamSidechainMode + 5;
-constexpr int kParamSidechainReleaseCurve = kParamSidechainMode + 6;
-constexpr int kParamSidechainMakeup = kParamSidechainMode + 7;
-constexpr int kParamMasterFilterEnable = kParamSidechainMakeup + 1;
+constexpr int kParamSidechainDepth = kParamSidechainMode + 2;
+constexpr int kParamSidechainLookahead = kParamSidechainMode + 3;
+constexpr int kParamSidechainEnvLength = kParamSidechainMode + 4;
+constexpr int kParamSidechainCurve = kParamSidechainMode + 5;
+constexpr int kParamSidechainSmooth = kParamSidechainMode + 6;
+constexpr int kParamMasterFilterEnable = kParamSidechainSmooth + 1;
 constexpr int kParamMasterFilterHpCutoff = kParamMasterFilterEnable + 1;
 constexpr int kParamMasterFilterLpCutoff = kParamMasterFilterEnable + 2;
 constexpr int kParamMasterFilterQ = kParamMasterFilterEnable + 3;
@@ -103,17 +99,9 @@ constexpr int kParamMasterSendL = kParamMasterMode + 1;
 constexpr int kParamMasterSendR = kParamMasterMode + 2;
 constexpr int kParamMasterReturnL = kParamMasterMode + 3;
 constexpr int kParamMasterReturnR = kParamMasterMode + 4;
-constexpr int kParamEq1Freq = kParamMasterReturnR + 1;
-constexpr int kParamEq1Gain = kParamEq1Freq + 1;
-constexpr int kParamEq1Q = kParamEq1Freq + 2;
-constexpr int kParamEq2Freq = kParamEq1Freq + 3;
-constexpr int kParamEq2Gain = kParamEq1Freq + 4;
-constexpr int kParamEq2Q = kParamEq1Freq + 5;
-constexpr int kParamEq3Freq = kParamEq1Freq + 6;
-constexpr int kParamEq3Gain = kParamEq1Freq + 7;
-constexpr int kParamEq3Q = kParamEq1Freq + 8;
-constexpr int kNumEqParams = 9;
-constexpr int kNumGlobalParams = kParamEq1Freq + kNumEqParams;
+constexpr int kParamMasterGain = kParamMasterReturnR + 1;
+constexpr int kParamBypassOffset = kParamMasterGain + 1;
+constexpr int kNumGlobalParams = kParamBypassOffset + 1;
 
 enum ChannelParam
 {
@@ -138,13 +126,13 @@ enum ChannelParam
 
 constexpr int kGlobalPageParams = 2;
 constexpr int kRouteSetupParams = kParamMainL - 1;
-constexpr int kFinalOutputParams = kParamFx1L - kParamMainL;
+constexpr int kFinalOutputParams = kParamFx1L - kParamMainL + 1; // Bypass Offset
 constexpr int kFxSetupParams = kParamSidechainMode - kParamFx1L;
-constexpr int kMasterPageParams = kNumGlobalParams - kParamSidechainMode;
+constexpr int kMasterPageParams = kNumGlobalParams - kParamSidechainMode - 1;
 constexpr int kMaxParams = kNumGlobalParams + kMaxChannels * kNumChannelParams;
-static_assert(kMaxParams == 242, "11-channel parameter budget changed");
-static_assert(kMaxParams < 256, "parameter indices exceed NT limit");
-static_assert(kNumGlobalParams == 77, "global parameter count changed");
+static_assert(kMaxParams == 234, "11-channel parameter budget changed");
+static_assert(kMaxParams <= 241, "disting NT supports at most 241 parameters per algorithm");
+static_assert(kNumGlobalParams == 69, "global parameter count changed");
 static_assert(kParamMainL == 31, "final output page indices changed");
 static_assert(kParamFx1L == 35, "FX setup page indices changed");
 static_assert(kParamRepeatProtection == 49, "repeat protection index changed");
@@ -168,10 +156,6 @@ static char const* const outputPathStrings[] = {
 
 static char const* const masterModeStrings[] = {
 	"Split", "Sum", "Insert",
-};
-
-static char const* const keyModeStrings[] = {
-	"Trigger", "Gate", "Audio",
 };
 
 static char const* const widthStrings[] = {
@@ -284,7 +268,7 @@ static const uint8_t routeSetupPageParams[kRouteSetupParams] = {
 
 static const uint8_t finalOutputPageParams[kFinalOutputParams] = {
 	kParamMainL, kParamMainR,
-	kParamBypassL, kParamBypassR,
+	kParamBypassL, kParamBypassR, kParamBypassOffset,
 };
 
 static const uint8_t fxSetupPageParams[kFxSetupParams] = {
@@ -298,23 +282,17 @@ static const uint8_t fxSetupPageParams[kFxSetupParams] = {
 };
 
 static const uint8_t masterPageParams[kMasterPageParams] = {
-	kParamSidechainMode, kParamSidechainKeyInput,
-	kParamSidechainKeyMode, kParamSidechainDepth,
-	kParamSidechainAttack, kParamSidechainRelease,
-	kParamSidechainReleaseCurve, kParamSidechainMakeup,
-	kParamMasterFilterEnable, kParamMasterFilterHpCutoff,
-	kParamMasterFilterLpCutoff, kParamMasterFilterQ,
-	kParamMasterFilterSweep,
-	kParamEq1Freq, kParamEq1Gain, kParamEq1Q,
-	kParamEq2Freq, kParamEq2Gain, kParamEq2Q,
-	kParamEq3Freq, kParamEq3Gain, kParamEq3Q,
-	kParamMasterMode,
-	kParamMasterSendL, kParamMasterSendR,
-	kParamMasterReturnL, kParamMasterReturnR,
+	kParamSidechainMode, kParamSidechainKeyInput, kParamSidechainDepth,
+	kParamSidechainLookahead, kParamSidechainEnvLength, kParamSidechainCurve,
+	kParamSidechainSmooth,
+	kParamMasterFilterEnable, kParamMasterFilterHpCutoff, kParamMasterFilterLpCutoff,
+	kParamMasterFilterQ, kParamMasterFilterSweep, kParamMasterMode,
+	kParamMasterSendL, kParamMasterSendR, kParamMasterReturnL, kParamMasterReturnR,
+	kParamMasterGain,
 };
 
 static const _NT_specification specifications[] = {
-	{ .name = "Channels", .min = 1, .max = kMaxChannels, .def = 4, .type = kNT_typeGeneric },
+	{ .name = "Channels", .min = 1, .max = kMaxChannels, .def = kMaxChannels, .type = kNT_typeGeneric },
 };
 
 struct SmoothedValue
@@ -345,16 +323,29 @@ struct OutputPair
 	bool singleFrame;
 };
 
+struct RampSmoothRuntime
+{
+	float value, target, increment;
+	int remaining, samples;
+};
+
 struct SidechainRuntime
 {
-	bool keyHigh;
-	int stage;
-	int samplesRemaining;
-	int samplesTotal;
-	float startGain;
-	float targetGain;
+	bool initialised, keyHigh;
+	int remaining;
+	double value, increment, multiplier;
 	float gain;
-	float detector;
+	RampSmoothRuntime smooth;
+};
+
+// Stereo rings belong to each instance's DRAM, independent of channel count.
+constexpr int kMainDelayCapacity = 961;    // 10 ms at 96 kHz + current sample
+constexpr int kBypassDelayCapacity = 9601; // 100 ms at 96 kHz + current sample
+struct StereoDelay
+{
+	float* data;
+	int capacity, write, current, target, requested, fadePosition, fadeSamples;
+	bool initialised;
 };
 
 struct SvfRuntime
@@ -369,26 +360,6 @@ struct MasterFilterRuntime
 	SvfRuntime hpRight;
 	SvfRuntime lpLeft;
 	SvfRuntime lpRight;
-};
-
-// Double precision prevents cancellation at low frequencies/high sample rates.
-struct EqCoefficients { double b0, b1, b2, a1, a2; };
-struct EqState { double x1, x2, y1, y2; };
-struct EqBandRuntime
-{
-	float controls[3];
-	float targets[3];
-	EqCoefficients coefficients;
-	EqState left, right;
-	bool dirty;
-};
-struct MasterEqRuntime
-{
-	EqBandRuntime bands[3];
-	float sampleRate;
-	float smoothing;
-	int untilUpdate;
-	bool initialised;
 };
 
 typedef uint8_t ChannelPage[kNumChannelParams];
@@ -412,7 +383,14 @@ struct WitchboardAlgorithm : public _NT_algorithm
 	ChannelRuntime* runtime;
 	SidechainRuntime sidechain;
 	MasterFilterRuntime masterFilter;
-	MasterEqRuntime masterEq;
+	StereoDelay mainDelay, bypassDelay;
+	bool latencyInitialised;
+	int previousAuto, previousEffective, manualTrim;
+	bool savedTrim;
+	int cachedLengthControl, cachedCurveControl, envSamples;
+	float cachedSampleRate, curveBeta;
+	SmoothedValue masterGain;
+	bool masterGainInitialised;
 	char routeNames[kNumRoutes][kHardwareNameLength];
 	char fxNames[2][kHardwareNameLength];
 	char slotNames[kNumInserts][kNumInsertStates][kSlotNameLength];
@@ -450,6 +428,7 @@ size_t requiredDram(int channels)
 	size = addStorage<_NT_parameterPage>(size, 5 + channels);
 	size = addStorage<ChannelPage>(size, channels);
 	size = addStorage<ChannelRuntime>(size, channels);
+	size = addStorage<float>(size, 2 * (kMainDelayCapacity + kBypassDelayCapacity));
 	return size;
 }
 
@@ -462,7 +441,22 @@ WitchboardAlgorithm::WitchboardAlgorithm(int channels, uint8_t* dram)
 	memset(runtime, 0, sizeof(ChannelRuntime) * numChannels);
 	memset(&sidechain, 0, sizeof(sidechain));
 	memset(&masterFilter, 0, sizeof(masterFilter));
-	memset(&masterEq, 0, sizeof(masterEq));
+	memset(&mainDelay, 0, sizeof(mainDelay));
+	memset(&bypassDelay, 0, sizeof(bypassDelay));
+	mainDelay.capacity = kMainDelayCapacity;
+	bypassDelay.capacity = kBypassDelayCapacity;
+	mainDelay.data = takeStorage<float>(dram, 2 * kMainDelayCapacity);
+	bypassDelay.data = takeStorage<float>(dram, 2 * kBypassDelayCapacity);
+	memset(mainDelay.data, 0, sizeof(float) * 2 * kMainDelayCapacity);
+	memset(bypassDelay.data, 0, sizeof(float) * 2 * kBypassDelayCapacity);
+	latencyInitialised = false;
+	previousAuto = previousEffective = manualTrim = 0;
+	savedTrim = false;
+	cachedLengthControl = cachedCurveControl = -10000;
+	cachedSampleRate = curveBeta = 0;
+	envSamples = 1;
+	memset(&masterGain, 0, sizeof(masterGain));
+	masterGainInitialised = false;
 	setDefaultNames();
 	if (!parameterTablesBuilt)
 	{
@@ -594,27 +588,25 @@ void buildParameters()
 
 	setParameter(parameterDefs[kParamSidechainMode], "Sidechain", 0, 1, 0,
 		kNT_unitEnum, offOnStrings);
-	setInput(parameterDefs[kParamSidechainKeyInput], "SC key input");
-	setParameter(parameterDefs[kParamSidechainKeyMode], "SC key mode", 0, 2,
-		kKeyTrigger, kNT_unitEnum, keyModeStrings);
-	setParameter(parameterDefs[kParamSidechainDepth], "SC depth", 0, 100, 90,
-		kNT_unitPercent);
-	setParameter(parameterDefs[kParamSidechainAttack], "SC attack", 0, 50, 0,
-		kNT_unitMs);
-	setParameter(parameterDefs[kParamSidechainRelease], "SC release", 5, 800, 120,
-		kNT_unitMs);
-	setParameter(parameterDefs[kParamSidechainReleaseCurve], "SC curve", -300, 200, -120,
-		kNT_unitNone);
-	setParameter(parameterDefs[kParamSidechainMakeup], "SC makeup", 0, 6, 2,
-		kNT_unitDb);
+	setInput(parameterDefs[kParamSidechainKeyInput], "SC Trigger Input");
+	parameterDefs[kParamSidechainKeyInput].unit = kNT_unitCvInput;
+	setParameter(parameterDefs[kParamSidechainDepth], "SC Depth", 0, 100, 69, kNT_unitPercent);
+	setParameter(parameterDefs[kParamSidechainLookahead], "SC Lookahead", 0, 100, 60, kNT_unitMs);
+	parameterDefs[kParamSidechainLookahead].scaling = kNT_scaling10;
+	// Normalized log control, displayed in actual milliseconds by parameterString.
+	setParameter(parameterDefs[kParamSidechainEnvLength], "SC Env Length", 0, 1000, 486, kNT_unitHasStrings);
+	setParameter(parameterDefs[kParamSidechainCurve], "SC Curve", -100, 100, 20, kNT_unitNone);
+	setParameter(parameterDefs[kParamSidechainSmooth], "SC Smooth", 0, 100, 4, kNT_unitPercent);
+	setParameter(parameterDefs[kParamBypassOffset], "Bypass Offset", 0, 1000, 0, kNT_unitMs);
+	parameterDefs[kParamBypassOffset].scaling = kNT_scaling10;
 
 	setParameter(parameterDefs[kParamMasterFilterEnable], "Filter enable", 0, 1, 0,
 		kNT_unitEnum, offOnStrings);
-	setParameter(parameterDefs[kParamMasterFilterHpCutoff], "HP limit", 0, 100, 100,
+	setParameter(parameterDefs[kParamMasterFilterHpCutoff], "HP limit", 0, 100, 70,
 		kNT_unitPercent);
-	setParameter(parameterDefs[kParamMasterFilterLpCutoff], "LP limit", 0, 100, 0,
+	setParameter(parameterDefs[kParamMasterFilterLpCutoff], "LP limit", 0, 100, 20,
 		kNT_unitPercent);
-	setParameter(parameterDefs[kParamMasterFilterQ], "Filter Q", 0, 100, 0,
+	setParameter(parameterDefs[kParamMasterFilterQ], "Filter Q", 0, 100, 10,
 		kNT_unitPercent);
 	setParameter(parameterDefs[kParamMasterFilterSweep], "Filter sweep", -100, 100, 0,
 		kNT_unitPercent);
@@ -626,16 +618,7 @@ void buildParameters()
 	setInput(parameterDefs[kParamMasterReturnL], "Master return L");
 	setInput(parameterDefs[kParamMasterReturnR], "Master return R");
 
-	// Log controls map nominally to 20 Hz..20 kHz and Q 0.25..12.
-	static const char* const eqNames[kNumEqParams] = {
-		"EQ1 Freq", "EQ1 Gain", "EQ1 Q", "EQ2 Freq", "EQ2 Gain", "EQ2 Q",
-		"EQ3 Freq", "EQ3 Gain", "EQ3 Q",
-	};
-	const int eqDefaults[kNumEqParams] = { 259, 0, 358, 566, 0, 358, 867, 0, 358 };
-	for (int i = 0; i < kNumEqParams; ++i)
-		setParameter(parameterDefs[kParamEq1Freq + i], eqNames[i],
-			i % 3 == 1 ? -18 : 0, i % 3 == 1 ? 18 : 1000, eqDefaults[i],
-			i % 3 == 1 ? kNT_unitDb : kNT_unitHasStrings);
+	setParameter(parameterDefs[kParamMasterGain], "Master Gain", -12, 6, 0, kNT_unitDb);
 
 	for (int channel = 0; channel < kMaxChannels; ++channel)
 	{
@@ -645,7 +628,7 @@ void buildParameters()
 		setInput(parameterDefs[base + kChannelInputL], channelSuffixes[kChannelInputL]);
 		setInput(parameterDefs[base + kChannelInputR], channelSuffixes[kChannelInputR]);
 		setParameter(parameterDefs[base + kChannelGain],
-			channelSuffixes[kChannelGain], -60, 0, 0, kNT_unitDb_minInf);
+			channelSuffixes[kChannelGain], -60, 6, 0, kNT_unitDb_minInf);
 		setParameter(parameterDefs[base + kChannelInsert1],
 			channelSuffixes[kChannelInsert1], 0, kInsertParameterMax, 0,
 			kNT_unitEnum, insertStateStrings);
@@ -756,367 +739,166 @@ inline float clampFloat(float value, float minimum, float maximum)
 	return value < minimum ? minimum : (value > maximum ? maximum : value);
 }
 
-float shapeReleaseProgress(float progress, int curveParam)
-{
-	progress = clampFloat(progress, 0.0f, 1.0f);
-	const float amount = clampFloat(fabsf(curveParam) / 300.0f, 0.0f, 1.0f);
-	if (amount <= 0.0f)
-		return progress;
-
-	const float x = curveParam < 0 ? progress : 1.0f - progress;
-	const float x2 = x * x;
-	const float x4 = x2 * x2;
-	const float x8 = x4 * x4;
-	const float steep = x8 * x;
-	const float shaped = x + (steep - x) * amount;
-	if (curveParam < 0)
-		return shaped;
-	return 1.0f - shaped;
-}
-
-int timeMsToSamples(int milliseconds, int sampleRate, int minimumSamples)
-{
-	const int samples = milliseconds * sampleRate / 1000;
-	return samples < minimumSamples ? minimumSamples : samples;
-}
-
-enum SidechainStage
-{
-	kSidechainIdle,
-	kSidechainAttack,
-	kSidechainRelease,
-};
-
-constexpr float kSidechainTriggerThreshold = 0.1f;
 constexpr float kPi = 3.14159265358979323846f;
 
-void startSidechainStage(SidechainRuntime& sidechain, int stage, float targetGain,
-	int totalSamples)
+float envLengthFromNormalized(float x)
 {
-	sidechain.stage = stage;
-	sidechain.startGain = sidechain.gain;
-	sidechain.targetGain = clampFloat(targetGain, 0.0f, 1.0f);
-	sidechain.samplesTotal = totalSamples < 1 ? 1 : totalSamples;
-	sidechain.samplesRemaining = sidechain.samplesTotal;
+	return 50.0f * powf(40.0f, clampFloat(x, 0.0f, 1.0f));
 }
 
-void startSidechainEnvelope(SidechainRuntime& sidechain, int depthPercent,
-	int attackSamples)
+int millisecondsToSamples(float ms, float sampleRate)
 {
-	const float targetGain = 1.0f - clampFloat(depthPercent * 0.01f, 0.0f, 1.0f);
-	if (attackSamples <= 1)
-	{
-		sidechain.gain = targetGain;
-		sidechain.stage = kSidechainRelease;
-		sidechain.samplesRemaining = 0;
-		sidechain.samplesTotal = 1;
-		sidechain.startGain = targetGain;
-		sidechain.targetGain = 1.0f;
-		return;
-	}
-
-	startSidechainStage(sidechain, kSidechainAttack, targetGain, attackSamples);
+	return static_cast<int>(ms * sampleRate * 0.001f + 0.5f);
 }
 
-void advanceSidechainEnvelope(SidechainRuntime& sidechain, int releaseSamples,
-	int curveParam)
+float curveToBeta(float c)
 {
-	if (sidechain.gain <= 0.0f && sidechain.stage == kSidechainIdle)
-		sidechain.gain = 1.0f;
+	c = clampFloat(c, -1.0f, 1.0f);
+	if (fabsf(c) < 0.001f) return 0.0f;
+	float hp = powf((fabsf(c) + 1.0e-20f) * 1.2f, 0.41f) * 0.91f;
+	hp = clampFloat(hp, 0.0f, 0.999999f);
+	const float fp = hp / (1.0f - hp);
+	return c < 0.0f ? -fp : fp;
+}
 
-	if (sidechain.stage == kSidechainAttack)
+void startSidechainEnvelope(SidechainRuntime& sc, int lengthSamples, float beta)
+{
+	sc.remaining = lengthSamples < 1 ? 1 : lengthSamples;
+	sc.value = 0.0;
+	sc.multiplier = 1.0;
+	sc.increment = 1.0 / sc.remaining;
+	if (beta != 0.0f)
 	{
-		if (sidechain.samplesRemaining <= 0)
-		{
-			sidechain.gain = sidechain.targetGain;
-			startSidechainStage(sidechain, kSidechainRelease, 1.0f, releaseSamples);
-		}
-		else
-		{
-			const float progress = 1.0f
-				- static_cast<float>(sidechain.samplesRemaining) / sidechain.samplesTotal;
-			sidechain.gain = sidechain.startGain
-				+ (sidechain.targetGain - sidechain.startGain)
-					* clampFloat(progress, 0.0f, 1.0f);
-			--sidechain.samplesRemaining;
-		}
-		return;
-	}
-
-	if (sidechain.stage == kSidechainRelease)
-	{
-		if (sidechain.samplesRemaining <= 0)
-		{
-			if (sidechain.targetGain != 1.0f)
-				startSidechainStage(sidechain, kSidechainRelease, 1.0f, releaseSamples);
-			else
-			{
-				sidechain.gain = 1.0f;
-				sidechain.stage = kSidechainIdle;
-			}
-			return;
-		}
-
-		const float progress = 1.0f
-			- static_cast<float>(sidechain.samplesRemaining) / sidechain.samplesTotal;
-		const float shapedProgress = shapeReleaseProgress(progress, curveParam);
-		sidechain.gain = sidechain.startGain
-			+ (sidechain.targetGain - sidechain.startGain) * shapedProgress;
-		--sidechain.samplesRemaining;
+		// expm1(beta/N), without small-argument subtraction or an extra libm import.
+		// |z| < 0.031 for the public ranges at all supported sample rates.
+		const double z = static_cast<double>(beta) / sc.remaining;
+		const double qm1 = z * (1 + z * (0.5 + z * (1.0/6 + z * (1.0/24
+			+ z * (1.0/120 + z / 720)))));
+		sc.multiplier = 1.0 + qm1;
+		sc.increment = qm1 / (static_cast<double>(powf(2.718281828459045f, beta)) - 1.0);
 	}
 }
 
-float processSidechain(SidechainRuntime& sidechain, float keyMagnitude, int keyMode,
-	int depthPercent, int attackMs, int releaseMs, int curveParam)
+float rampSmooth(RampSmoothRuntime& ramp, float input, int samples)
 {
-	if (sidechain.gain <= 0.0f && sidechain.stage == kSidechainIdle)
-		sidechain.gain = 1.0f;
-
-	const float absoluteKey = fabsf(keyMagnitude);
-	const bool keyHigh = absoluteKey > kSidechainTriggerThreshold;
-	const int configuredSampleRate = static_cast<int>(NT_globals.sampleRate);
-	const int sampleRate = configuredSampleRate > 0 ? configuredSampleRate : 48000;
-	const int attackSamples = timeMsToSamples(attackMs, sampleRate, 0);
-	const int releaseSamples = timeMsToSamples(releaseMs, sampleRate, 1);
-	const float depth = clampFloat(depthPercent * 0.01f, 0.0f, 1.0f);
-
-	if (keyMode == kKeyAudio)
+	if (samples <= 1)
 	{
-		const float target = clampFloat(absoluteKey, 0.0f, 1.0f);
-		if (target >= sidechain.detector)
-		{
-			if (attackSamples <= 1)
-				sidechain.detector = target;
-			else
-				sidechain.detector += (target - sidechain.detector)
-					/ static_cast<float>(attackSamples);
-		}
-		else
-		{
-			const float curve = static_cast<float>(curveParam);
-			const float releaseScale = curve < 0.0f
-				? 1.0f / (1.0f + fabsf(curve) * 0.03f)
-				: 1.0f + curve * 0.02f;
-			sidechain.detector += (target - sidechain.detector)
-				* releaseScale / static_cast<float>(releaseSamples);
-		}
-
-		sidechain.keyHigh = keyHigh;
-		sidechain.stage = kSidechainIdle;
-		sidechain.gain = 1.0f - depth * clampFloat(sidechain.detector, 0.0f, 1.0f);
-		return clampFloat(sidechain.gain, 0.0f, 1.0f);
+		ramp.value = ramp.target = input;
+		ramp.remaining = 0;
+		ramp.samples = samples;
+		return input;
 	}
-
-	if (keyMode == kKeyTrigger)
+	// rampsmooth~ semantics: each changed input starts a new linear ramp.
+	// A constant input must finish in N samples, rather than decay exponentially.
+	if (input != ramp.target || samples != ramp.samples)
 	{
-		if (keyHigh && !sidechain.keyHigh)
-		{
-			startSidechainEnvelope(sidechain, depthPercent, attackSamples);
-			if (sidechain.stage == kSidechainRelease && sidechain.samplesRemaining == 0)
-				startSidechainStage(sidechain, kSidechainRelease, 1.0f, releaseSamples);
-		}
-		else
-			advanceSidechainEnvelope(sidechain, releaseSamples, curveParam);
+		ramp.target = input;
+		ramp.samples = samples;
+		ramp.remaining = samples;
+		ramp.increment = (input - ramp.value) / samples;
 	}
-	else
+	if (ramp.remaining > 0)
 	{
-		if (keyHigh && !sidechain.keyHigh)
-		{
-			startSidechainEnvelope(sidechain, depthPercent, attackSamples);
-			if (sidechain.stage == kSidechainRelease && sidechain.samplesRemaining == 0)
-				startSidechainStage(sidechain, kSidechainRelease, 1.0f, releaseSamples);
-		}
-		else if (keyHigh && sidechain.stage == kSidechainAttack)
-			advanceSidechainEnvelope(sidechain, releaseSamples, curveParam);
-		else if (keyHigh)
-		{
-			sidechain.gain = 1.0f - depth;
-			sidechain.stage = kSidechainIdle;
-		}
-		else
-		{
-			if (sidechain.stage == kSidechainIdle && sidechain.gain < 1.0f)
-				startSidechainStage(sidechain, kSidechainRelease, 1.0f, releaseSamples);
-			advanceSidechainEnvelope(sidechain, releaseSamples, curveParam);
-		}
+		ramp.value += ramp.increment;
+		if (--ramp.remaining == 0) ramp.value = ramp.target;
 	}
-
-	sidechain.keyHigh = keyHigh;
-	return clampFloat(sidechain.gain, 0.0f, 1.0f);
+	return clampFloat(ramp.value, 0.0f, 1.0f);
 }
 
-/*
-Peaking design and oneSided Q compensation adapted from
-https://github.com/Signalsmith-Audio/dsp/blob/main/filters.h
-Only the oneSided peaking path is ported; no library dependency.
-
-MIT License
-Copyright (c) 2021 Geraint Luff / Signalsmith Audio Ltd.
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-*/
-constexpr double kEqPi = 3.14159265358979323846;
-constexpr int kEqControlInterval = 16;
-
-float eqFrequency(float control, float sampleRate)
+float processSidechain(SidechainRuntime& sc, float key, int lengthSamples,
+	float beta, int smoothSamples, float depth)
 {
-	const float maximum = sampleRate * 0.45f < 20000.0f ? sampleRate * 0.45f : 20000.0f;
-	return clampFloat(20.0f * powf(1000.0f, clampFloat(control, 0, 1000) * 0.001f),
-		20.0f, maximum);
-}
-
-float eqQ(float control)
-{
-	return 0.25f * powf(48.0f, clampFloat(control, 0, 1000) * 0.001f);
-}
-
-// Range-reduced Taylor polynomials on [0, pi/2]. Avoid new NT libm imports.
-// The first omitted sine term is < 2e-18 on this interval.
-double eqSinHalf(double x)
-{
-	const double x2 = x*x;
-	double polynomial = 1.0/51090942171709440000.0;
-	polynomial = -1.0/121645100408832000.0 + x2*polynomial;
-	polynomial = 1.0/355687428096000.0 + x2*polynomial;
-	polynomial = -1.0/1307674368000.0 + x2*polynomial;
-	polynomial = 1.0/6227020800.0 + x2*polynomial;
-	polynomial = -1.0/39916800.0 + x2*polynomial;
-	polynomial = 1.0/362880.0 + x2*polynomial;
-	polynomial = -1.0/5040.0 + x2*polynomial;
-	polynomial = 1.0/120.0 + x2*polynomial;
-	polynomial = -1.0/6.0 + x2*polynomial;
-	return x*(1 + x2*polynomial);
-}
-
-double eqTanHalf(double x)
-{
-	return eqSinHalf(x) / eqSinHalf(kEqPi*0.5 - x);
-}
-
-EqCoefficients makeEqCoefficients(float frequency, float gainDb, float q, float sampleRate)
-{
-	if (gainDb == 0)
-		return { 1, 0, 0, 0, 0 };
-	const double halfW = kEqPi * clampFloat(frequency, 20, sampleRate*0.45f) / sampleRate;
-	const double sinHalf = eqSinHalf(halfW);
-	const double cosHalf = eqSinHalf(kEqPi*0.5 - halfW);
-	const double sinW = 2*sinHalf*cosHalf;
-	const double cosW = cosHalf*cosHalf - sinHalf*sinHalf;
-	const double inv2Q = 0.5 / clampFloat(q, 0.25f, 12);
-	// Rationalised form of sqrt(1 + inv2Q^2) - inv2Q.
-	// Newton square root on [1, 5], five iterations from a bounded estimate.
-	// Avoid even a conditional sqrtf import from the compiler's libm fallback.
-	const double squared = 1 + inv2Q*inv2Q;
-	double root = 1 + inv2Q;
-	for (int i = 0; i < 5; ++i) root = 0.5*(root + squared/root);
-	const double f1Factor = 1 / (root + inv2Q);
-	const double ctRatio = eqTanHalf(halfW*f1Factor) * cosHalf/sinHalf;
-	const double compensated = 0.5/ctRatio - 0.5*ctRatio;
-	const double alpha = sinW * compensated;
-	const double a = powf(10, clampFloat(gainDb, -18, 18)*0.025f);
-	const double normalise = 1 / (1 + alpha/a);
-	return { (1 + alpha*a)*normalise, -2*cosW*normalise,
-		(1 - alpha*a)*normalise, -2*cosW*normalise, (1 - alpha/a)*normalise };
-}
-
-double processEqBiquad(const EqCoefficients& c, EqState& state, double x)
-{
-	const double y = c.b0*x + c.b1*state.x1 + c.b2*state.x2
-		- c.a1*state.y1 - c.a2*state.y2;
-	state.x2 = state.x1;
-	state.x1 = x;
-	state.y2 = state.y1;
-	state.y1 = y;
-	return y;
-}
-
-bool prepareMasterEq(MasterEqRuntime& eq, const int16_t* parameters, float sampleRate)
-{
-	const bool rateChanged = !eq.initialised || eq.sampleRate != sampleRate;
-	if (rateChanged)
+	if (!sc.initialised)
 	{
-		eq.sampleRate = sampleRate;
-		// 10 ms time constant, independent of host block size.
-		eq.smoothing = 1 - powf(2.718281828459045f,
-			-kEqControlInterval / (0.01f*sampleRate));
-		eq.untilUpdate = 0;
+		sc.value = sc.gain = sc.smooth.value = sc.smooth.target = 1.0f;
+		sc.initialised = true;
 	}
-	bool active = false;
-	for (int band = 0; band < 3; ++band)
+	const bool high = fabsf(key) > 0.1f;
+	if (high && !sc.keyHigh)
+		startSidechainEnvelope(sc, lengthSamples, beta);
+	else if (sc.remaining > 0)
 	{
-		EqBandRuntime& b = eq.bands[band];
-		for (int field = 0; field < 3; ++field)
-		{
-			b.targets[field] = clampInt(parameters[kParamEq1Freq + band*3 + field],
-				field == 1 ? -18 : 0, field == 1 ? 18 : 1000);
-			if (!eq.initialised)
-				b.controls[field] = b.targets[field];
-		}
-		b.dirty = b.dirty || rateChanged;
-		active = active || b.targets[1] != 0 || b.controls[1] != 0;
+		sc.value += sc.increment;
+		sc.increment *= sc.multiplier;
+		if (--sc.remaining == 0) sc.value = 1.0;
 	}
-	eq.initialised = true;
-	return active;
+	sc.keyHigh = high;
+	const float envelope = rampSmooth(sc.smooth,
+		clampFloat(static_cast<float>(sc.value), 0.0f, 1.0f), smoothSamples);
+	sc.gain = 1.0f - clampFloat(depth, 0.0f, 1.0f) * (1.0f - envelope);
+	return sc.gain;
 }
 
-void advanceMasterEq(MasterEqRuntime& eq)
+void setDelay(StereoDelay& delay, int samples, int fadeSamples)
 {
-	if (eq.untilUpdate-- > 0)
-		return;
-	eq.untilUpdate = kEqControlInterval - 1;
-	for (int band = 0; band < 3; ++band)
+	delay.requested = clampInt(samples, 0, delay.capacity - 1);
+	delay.fadeSamples = fadeSamples < 1 ? 1 : fadeSamples;
+	if (!delay.initialised)
 	{
-		EqBandRuntime& b = eq.bands[band];
-		bool changed = b.dirty;
-		for (int field = 0; field < 3; ++field)
-		{
-			const float delta = b.targets[field] - b.controls[field];
-			if (delta != 0)
-			{
-				const float next = b.controls[field] + eq.smoothing*delta;
-				b.controls[field] = fabsf(delta) < 0.00001f || next == b.controls[field]
-					? b.targets[field] : next;
-				changed = true;
-			}
-		}
-		if (changed)
-		{
-			b.coefficients = makeEqCoefficients(eqFrequency(b.controls[0], eq.sampleRate),
-				b.controls[1], eqQ(b.controls[2]), eq.sampleRate);
-			b.dirty = false;
-		}
+		delay.current = delay.target = delay.requested;
+		delay.initialised = true;
 	}
 }
 
-void processMasterEq(MasterEqRuntime& eq, float& left, float& right)
+void processDelay(StereoDelay& delay, float& left, float& right)
 {
-	double l = left, r = right;
-	for (int band = 0; band < 3; ++band)
+	delay.data[2 * delay.write] = left;
+	delay.data[2 * delay.write + 1] = right;
+	// Finish a fade before adopting the latest request. Never reset an audible
+	// crossfade mid-flight, even if CV supplies a different delay every block.
+	if (delay.fadePosition == 0 && delay.current != delay.requested)
+		delay.target = delay.requested;
+	int oldRead = delay.write - delay.current;
+	if (oldRead < 0) oldRead += delay.capacity;
+	left = delay.data[2 * oldRead];
+	right = delay.data[2 * oldRead + 1];
+	if (delay.current != delay.target)
 	{
-		EqBandRuntime& b = eq.bands[band];
-		l = processEqBiquad(b.coefficients, b.left, l);
-		r = processEqBiquad(b.coefficients, b.right, r);
+		int newRead = delay.write - delay.target;
+		if (newRead < 0) newRead += delay.capacity;
+		const float mix = static_cast<float>(++delay.fadePosition) / delay.fadeSamples;
+		left += mix * (delay.data[2 * newRead] - left);
+		right += mix * (delay.data[2 * newRead + 1] - right);
+		if (delay.fadePosition >= delay.fadeSamples)
+		{
+			delay.current = delay.target;
+			delay.fadePosition = 0;
+		}
 	}
-	left = static_cast<float>(l);
-	right = static_cast<float>(r);
+	if (++delay.write == delay.capacity) delay.write = 0;
+}
+
+int followBypassOffset(WitchboardAlgorithm* self)
+{
+	const int activeAuto = self->v[kParamSidechainMode]
+		? clampInt(self->v[kParamSidechainLookahead], 0, 100) : 0;
+	const int publicValue = clampInt(self->v[kParamBypassOffset], 0, 1000);
+	// First audio block after loading: saved effective delay is authoritative.
+	// Optional trim metadata preserves intent when physical delay was clamped.
+	if (!self->latencyInitialised)
+	{
+		if (!self->savedTrim || clampInt(self->manualTrim + activeAuto, 0, 1000) != publicValue)
+			self->manualTrim = publicValue - activeAuto;
+		self->savedTrim = false;
+	}
+	else if (publicValue != self->previousEffective)
+		self->manualTrim = publicValue - self->previousAuto;
+	const int effective = clampInt(self->manualTrim + activeAuto, 0, 1000);
+	// Update state before the API setter, which may synchronously notify us.
+	self->previousAuto = activeAuto;
+	self->previousEffective = effective;
+	self->latencyInitialised = true;
+	if (effective != publicValue)
+	{
+		const int index = NT_algorithmIndex(self);
+		if (index >= 0)
+			NT_setParameterFromAudio(index, kParamBypassOffset + NT_parameterOffset(), effective);
+	}
+	return effective;
 }
 
 // Small decimal formatter avoids introducing printf into the NT object.
-int eqNumberString(char* buffer, unsigned value, int decimals, const char* suffix)
+int numberString(char* buffer, unsigned value, int decimals, const char* suffix)
 {
 	char digits[12];
 	int count = 0;
@@ -1473,6 +1255,7 @@ int selectedRoute(const WitchboardAlgorithm* self, int channel, int insert, int 
 	return clampInt(self->v[param], 0, kNumRoutes - 1);
 }
 
+_NT_DRAM_SECTION
 void calculateRequirements(_NT_algorithmRequirements& requirements, const int32_t* specs)
 {
 	const int channels = clampInt(specs[0], 1, kMaxChannels);
@@ -1483,6 +1266,7 @@ void calculateRequirements(_NT_algorithmRequirements& requirements, const int32_
 	requirements.itc = 0;
 }
 
+_NT_DRAM_SECTION
 _NT_algorithm* constructWitchboard(const _NT_algorithmMemoryPtrs& pointers,
 	const _NT_algorithmRequirements&, const int32_t* specs)
 {
@@ -1547,16 +1331,20 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 	const bool hpEnabled = filterOn && hpSweep;
 	const bool anyFilterEnabled = lpEnabled || hpEnabled;
 	const bool repeatProtection = self->v[kParamRepeatProtection] != 0;
-	const float eqSampleRate = NT_globals.sampleRate > 0 ? NT_globals.sampleRate : 48000;
-	const bool eqActive = prepareMasterEq(self->masterEq, self->v, eqSampleRate);
-	const bool busProcessing = sidechainEnabled || anyFilterEnabled || eqActive || masterMode != kMasterSplit;
+	const float gainSampleRate = NT_globals.sampleRate > 0 ? NT_globals.sampleRate : 48000;
+	const int masterGainDb = clampInt(self->v[kParamMasterGain], -12, 6);
+	if (!self->masterGainInitialised)
+	{
+		initialiseSmooth(self->masterGain, masterGainDb, dbGain(masterGainDb));
+		self->masterGainInitialised = true;
+	}
+	else if (self->masterGain.parameterValue != masterGainDb)
+		beginSmooth(self->masterGain, masterGainDb, dbGain(masterGainDb),
+			static_cast<int>(gainSampleRate * 0.01f));
 	if (!sidechainEnabled)
 		memset(&self->sidechain, 0, sizeof(self->sidechain));
 	if (!anyFilterEnabled)
 		resetMasterFilterAudioState(self->masterFilter);
-	const float sidechainMakeup = sidechainEnabled
-		? dbGain(self->v[kParamSidechainMakeup])
-		: 1.0f;
 	const float configuredSampleRate = NT_globals.sampleRate;
 	const float sampleRate = configuredSampleRate > 0.0f ? configuredSampleRate : 48000.0f;
 	const float filterQ = filterQFromPercent(self->v[kParamMasterFilterQ]);
@@ -1571,7 +1359,27 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 			filterQ)
 		: SvfCoefficients();
 	const float* sidechainKey = inputBus(busFrames, self->v[kParamSidechainKeyInput], numFrames);
-	const int sidechainKeyMode = clampInt(self->v[kParamSidechainKeyMode], kKeyTrigger, kKeyAudio);
+	const int effectiveBypass = followBypassOffset(self);
+	const int fadeDelaySamples = millisecondsToSamples(5.0f, sampleRate);
+	setDelay(self->mainDelay, sidechainEnabled
+		? millisecondsToSamples(self->v[kParamSidechainLookahead] * 0.1f, sampleRate) : 0, fadeDelaySamples);
+	setDelay(self->bypassDelay, millisecondsToSamples(effectiveBypass * 0.1f, sampleRate), fadeDelaySamples);
+	// Cache control coefficients instead of recomputing them every audio block.
+	if (self->cachedSampleRate != sampleRate
+		|| self->cachedLengthControl != self->v[kParamSidechainEnvLength]
+		|| self->cachedCurveControl != self->v[kParamSidechainCurve])
+	{
+		self->cachedSampleRate = sampleRate;
+		self->cachedLengthControl = self->v[kParamSidechainEnvLength];
+		self->cachedCurveControl = self->v[kParamSidechainCurve];
+		self->envSamples = millisecondsToSamples(envLengthFromNormalized(
+			self->cachedLengthControl * 0.001f), sampleRate);
+		self->curveBeta = curveToBeta(self->cachedCurveControl * 0.01f);
+	}
+	const int envSamples = self->envSamples;
+	const float beta = self->curveBeta;
+	const int smoothSamples = millisecondsToSamples(self->v[kParamSidechainSmooth] * 2.0f, sampleRate);
+	const float depth = self->v[kParamSidechainDepth] * 0.01f;
 	const OutputPair masterSend = makeOutputPair(busFrames, numFrames,
 		self->v[kParamMasterSendL], self->v[kParamMasterSendR]);
 	const float* masterReturnL = inputBus(busFrames, self->v[kParamMasterReturnL], numFrames);
@@ -1649,11 +1457,9 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 		float mainRight = 0.0f;
 		float bypassLeft = 0.0f;
 		float bypassRight = 0.0f;
-		if (busProcessing)
-		{
-			outputs[0] = { &mainLeft, &mainRight, true };
-			outputs[1] = { &bypassLeft, &bypassRight, true };
-		}
+		// Collect both branches even at zero delay to keep ring history warm.
+		outputs[0] = { &mainLeft, &mainRight, true };
+		outputs[1] = { &bypassLeft, &bypassRight, true };
 
 		for (int fx = 0; fx < 2; ++fx)
 		{
@@ -1720,18 +1526,16 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 			}
 		}
 
-		advanceMasterEq(self->masterEq);
-		if (!busProcessing)
-			continue;
+		advanceSmooth(self->masterGain);
+		const float finalGain = self->masterGain.value;
 
 		const float keyMagnitude = sidechainKey ? sidechainKey[frame] : 0.0f;
 		const float sidechainGain = sidechainEnabled
-			? processSidechain(self->sidechain, keyMagnitude, sidechainKeyMode,
-				self->v[kParamSidechainDepth], self->v[kParamSidechainAttack],
-				self->v[kParamSidechainRelease], self->v[kParamSidechainReleaseCurve])
-			: 1.0f;
-		float processedMainLeft = mainLeft * sidechainGain * sidechainMakeup;
-		float processedMainRight = mainRight * sidechainGain * sidechainMakeup;
+			? processSidechain(self->sidechain, keyMagnitude, envSamples, beta, smoothSamples, depth) : 1.0f;
+		processDelay(self->mainDelay, mainLeft, mainRight);
+		processDelay(self->bypassDelay, bypassLeft, bypassRight);
+		float processedMainLeft = mainLeft * sidechainGain;
+		float processedMainRight = mainRight * sidechainGain;
 
 		if (masterMode == kMasterSplit)
 		{
@@ -1739,10 +1543,8 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 				processMasterFilter(self->masterFilter,
 					processedMainLeft, processedMainRight,
 					lpEnabled, hpEnabled, lpCoeffs, hpCoeffs);
-			if (eqActive)
-				processMasterEq(self->masterEq, processedMainLeft, processedMainRight);
-			addSignal(bypassOutput, frame, bypassLeft, bypassRight, true, 1.0f);
-			addSignal(mainOutput, frame, processedMainLeft, processedMainRight, true, 1.0f);
+			addSignal(bypassOutput, frame, bypassLeft, bypassRight, true, finalGain);
+			addSignal(mainOutput, frame, processedMainLeft, processedMainRight, true, finalGain);
 			continue;
 		}
 
@@ -1752,26 +1554,32 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 			processMasterFilter(self->masterFilter,
 				masterLeft, masterRight,
 				lpEnabled, hpEnabled, lpCoeffs, hpCoeffs);
-		if (eqActive)
-			processMasterEq(self->masterEq, masterLeft, masterRight);
 		if (masterMode == kMasterInsert)
 		{
 			addSignal(masterSend, frame, masterLeft, masterRight, true, 1.0f);
 			const float returnLeft = masterReturnL ? masterReturnL[frame] : 0.0f;
 			const float returnRight = masterReturnR ? masterReturnR[frame] : returnLeft;
 			addSignal(mainOutput, frame, returnLeft, returnRight,
-				masterReturnR != NULL, 1.0f);
+				masterReturnR != NULL, finalGain);
 		}
 		else
 		{
-			addSignal(mainOutput, frame, masterLeft, masterRight, true, 1.0f);
+			addSignal(mainOutput, frame, masterLeft, masterRight, true, finalGain);
 		}
 	}
 }
 
+_NT_DRAM_SECTION
 void serialise(_NT_algorithm* algorithm, _NT_jsonStream& stream)
 {
 	WitchboardAlgorithm* self = static_cast<WitchboardAlgorithm*>(algorithm);
+	// The NT host stores public values/mappings. Trim metadata makes clamps reversible.
+	const int autoValue = self->v[kParamSidechainMode] ? self->v[kParamSidechainLookahead] : 0;
+	const int trim = self->latencyInitialised && self->v[kParamBypassOffset] == self->previousEffective
+		? self->manualTrim : self->v[kParamBypassOffset] - autoValue;
+	stream.addMemberName("witchboardLatencyTrim");
+	stream.addNumber(trim);
+
 	stream.addMemberName("witchboardNames");
 	stream.openObject();
 		stream.addMemberName("routes");
@@ -1837,14 +1645,24 @@ bool parseSlotNames(_NT_jsonParse& parse,
 	return true;
 }
 
+_NT_DRAM_SECTION
 bool deserialise(_NT_algorithm* algorithm, _NT_jsonParse& parse)
 {
 	WitchboardAlgorithm* self = static_cast<WitchboardAlgorithm*>(algorithm);
+	self->latencyInitialised = false;
+	self->savedTrim = false;
 	int members = 0;
 	if (!parse.numberOfObjectMembers(members))
 		return false;
 	for (int member = 0; member < members; ++member)
 	{
+		if (parse.matchName("witchboardLatencyTrim"))
+		{
+			if (!parse.number(self->manualTrim)) return false;
+			self->manualTrim = clampInt(self->manualTrim, -100, 1000);
+			self->savedTrim = true;
+			continue;
+		}
 		if (!parse.matchName("witchboardNames"))
 		{
 			if (!parse.skipMember())
@@ -1895,22 +1713,11 @@ int copyParameterString(char* buffer, const char* text)
 	return strlen(buffer);
 }
 
+_NT_DRAM_SECTION
 int parameterString(_NT_algorithm* algorithm, int parameter, int value, char* buffer)
 {
-	if (parameter >= kParamEq1Freq && parameter < kNumGlobalParams)
-	{
-		const int field = (parameter - kParamEq1Freq) % 3;
-		if (field == 0)
-		{
-			const float rate = NT_globals.sampleRate > 0 ? NT_globals.sampleRate : 48000;
-			const float hz = eqFrequency(value, rate);
-			return hz < 1000 ? eqNumberString(buffer, static_cast<unsigned>(hz + 0.5f), 0, " Hz")
-				: eqNumberString(buffer, static_cast<unsigned>(hz*0.01f + 0.5f), 2, " kHz");
-		}
-		if (field == 2)
-			return eqNumberString(buffer, static_cast<unsigned>(eqQ(value)*100 + 0.5f), 2, "");
-		return 0;
-	}
+	if (parameter == kParamSidechainEnvLength)
+		return numberString(buffer, static_cast<unsigned>(envLengthFromNormalized(value * 0.001f) + 0.5f), 0, " ms");
 
 	WitchboardAlgorithm* self = static_cast<WitchboardAlgorithm*>(algorithm);
 	int offset = 0;
@@ -1934,6 +1741,7 @@ int parameterString(_NT_algorithm* algorithm, int parameter, int value, char* bu
 	return 0;
 }
 
+_NT_DRAM_SECTION
 int parameterUiPrefix(_NT_algorithm* algorithm, int parameter, char* buffer)
 {
 	WitchboardAlgorithm* self = static_cast<WitchboardAlgorithm*>(algorithm);
@@ -1952,9 +1760,9 @@ int parameterUiPrefix(_NT_algorithm* algorithm, int parameter, char* buffer)
 }
 
 static const _NT_factory witchboardFactory = {
-	.guid = NT_MULTICHAR('W', 't', 'E', 'Q'),
-	.name = "Witchboard EQ",
-	.description = "Serial routing matrix with sidechain gain shaping and master SVF filter / 3-band EQ",
+	.guid = NT_MULTICHAR('W', 't', 'b', 'X'),
+	.name = "WitchboardX",
+	.description = "Serial routing matrix with trigger ducking, latency alignment and master SVF filter",
 	.numSpecifications = ARRAY_SIZE(specifications),
 	.specifications = specifications,
 	.calculateStaticRequirements = NULL,
@@ -1979,7 +1787,7 @@ static const _NT_factory witchboardFactory = {
 
 } // namespace
 
-extern "C" uintptr_t pluginEntry(_NT_selector selector, uint32_t data)
+extern "C" _NT_DRAM_SECTION uintptr_t pluginEntry(_NT_selector selector, uint32_t data)
 {
 	switch (selector)
 	{
