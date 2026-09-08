@@ -1,6 +1,6 @@
 ![WitchboardX banner](assets/witchboardx-banner.png)
 
-# Witchboard
+# WitchboardX
 
 > **Firmware requirement: disting NT v1.19 beta, currently available only via Discord.**
 > Witchboard places cold code, including preset serialisation code, in DRAM and requires this firmware support.
