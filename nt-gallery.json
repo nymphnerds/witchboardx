@@ -8,8 +8,7 @@
   "version": "1.0.0",
   "category": "Utilities",
   "minimumFirmware": "1.19.0",
-  "description": "11-channel performance mixer with swappable inserts, FX sends, sidechain ducking and DJ-style filtering..Signals bend. Paths shift. Power moves where you command it.
-.",
+  "description": "11-channel performance mixer with swappable inserts, FX sends, sidechain ducking and DJ-style filtering. Signals bend. Paths shift. Power moves where you command it.",
   "releaseAssets": [
     "WitchboardX.o",
     "release.zip",
