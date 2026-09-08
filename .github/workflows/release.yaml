@@ -1,4 +1,4 @@
-name: Build and release Witchboard
+name: Build and release WitchboardX
 
 on:
   push:
@@ -56,6 +56,8 @@ jobs:
             release/WitchboardX.zip \
             release/release.zip \
             --verify-tag \
-            --title "Witchboard ${GITHUB_REF_NAME}" \
+            --title "WitchboardX ${GITHUB_REF_NAME}" \
             --latest \
+            --draft=false \
+            --prerelease=false \
             --notes-file .github/release-notes.md

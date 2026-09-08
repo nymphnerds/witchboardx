@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.0.0 — first WitchboardX release
+
+WitchboardX is a separate NT Gallery plugin using GUID `WtbX`; the original
+Witchboard retains GUID `WtC1` and its own version history. This is a normal
+release, not a prerelease. It requires disting NT v1.19 beta for DRAM cold-code
+and serialisation support.
+
+Includes 11 stereo channels, trigger ducking, Main lookahead, Bypass Offset,
+master filter, serial inserts, FX sends and the aligned example preset.
+The v1.34–v1.37 entries below are implementation handoff revisions, not
+WitchboardX public release versions.
+
 ## v1.37 — eleven channels, output-page alignment and locked defaults
 
 - Support and initially select 11 stereo channels: 234 of 241 parameters, with

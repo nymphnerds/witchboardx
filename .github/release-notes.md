@@ -1,4 +1,4 @@
-WitchboardX v1.37 supports 11 stereo channels with 234 parameters, trigger ducking, Main lookahead, Bypass Offset alignment, and the locked sidechain/filter defaults.
+WitchboardX v1.0 is the first release of this separate plugin (NT Gallery identity `WtbX`, distinct from Witchboard `WtC1`). It supports 11 stereo channels with 234 parameters, trigger ducking, Main lookahead, Bypass Offset alignment, and the locked sidechain/filter defaults.
 
 **Requires disting NT v1.19 beta**, currently available only via Discord, because cold code and preset serialisation use DRAM.
 

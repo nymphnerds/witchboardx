@@ -5,7 +5,7 @@
   "guid": "WtbX",
   "isCollection": false,
   "collectionGuids": [],
-  "version": "1.37.0",
+  "version": "1.0.0",
   "category": "Utilities",
   "minimumFirmware": "1.19.0",
   "description": "Eleven-channel serial routing mixer with trigger ducking, Main lookahead, automatic Bypass Offset alignment, master DJ filtering and Split/Sum/Insert routing.",

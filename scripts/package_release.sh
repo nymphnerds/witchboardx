@@ -8,7 +8,7 @@ case "$object" in /*) ;; *) object="$repo_root/$object" ;; esac
 case "$release_dir" in /*) ;; *) release_dir="$repo_root/$release_dir" ;; esac
 test -f "$object"
 mkdir -p "$release_dir"
-staging_dir="$(mktemp -d "$release_dir/.v137-package.XXXXXX")"
+staging_dir="$(mktemp -d "$release_dir/.v100-package.XXXXXX")"
 trap 'rm -rf -- "$staging_dir"' EXIT
 mkdir -p "$staging_dir/programs/plug-ins"
 cp "$object" "$staging_dir/programs/plug-ins/WitchboardX.o"
@@ -16,7 +16,7 @@ cp "$repo_root/scripts/migrate_v134_preset.py" "$staging_dir/"
 mkdir -p "$staging_dir/presets"
 cp "$repo_root/presets/WitchboardX.json" "$staging_dir/presets/"
 printf '%s\n' \
-    "Witchboard v1.37 - 11 channels, trigger ducker and output latency alignment" \
+    "WitchboardX v1.0 - 11 channels, trigger ducker and output latency alignment" \
     "Copy programs/plug-ins/WitchboardX.o to the same path on the disting NT MicroSD card." \
     "The plug-in appears as 'WitchboardX' and uses GUID WtbX." \
     "Requires disting NT v1.19 beta with DRAM cold-code/serialisation support (API v13); beta currently available only via Discord." \
