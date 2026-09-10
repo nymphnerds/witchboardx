@@ -1,4 +1,4 @@
-name: Temporary Loopy Dial native-name build
+name: Temporary Loopy Dial numbered build
 on:
   push:
     branches: [tmp-loopydial-full-api]
@@ -19,11 +19,9 @@ jobs:
           git -C ../distingNT_API remote add origin https://github.com/expertsleepersltd/distingNT_API.git
           git -C ../distingNT_API fetch --depth 1 origin 5a4910d1d4233180114d6aee5ddaa4b8aec577e8
           git -C ../distingNT_API checkout --detach FETCH_HEAD
-      - name: Apply profile-name fix
-        run: python3 tmp-loopydial/make_name_fix.py
-      - name: Build full Loopy Dial
+      - name: Build numbered Loopy Dial
         run: |
-          mkdir -p tmp-loopydial-native/plugins
+          mkdir -p tmp-loopydial-numbered/plugins
           arm-none-eabi-c++ \
             -std=c++11 \
             -mcpu=cortex-m7 \
@@ -37,13 +35,13 @@ jobs:
             -Wall -Wextra -Werror \
             -I../distingNT_API/include \
             -c tmp-loopydial/loopydial.cpp \
-            -o tmp-loopydial-native/plugins/loopydial.o
+            -o tmp-loopydial-numbered/plugins/loopydial.o
       - name: Inspect object
         run: |
-          file tmp-loopydial-native/plugins/loopydial.o
-          arm-none-eabi-size -B tmp-loopydial-native/plugins/loopydial.o
-          arm-none-eabi-nm tmp-loopydial-native/plugins/loopydial.o | grep ' pluginEntry$'
+          file tmp-loopydial-numbered/plugins/loopydial.o
+          arm-none-eabi-size -B tmp-loopydial-numbered/plugins/loopydial.o
+          arm-none-eabi-nm tmp-loopydial-numbered/plugins/loopydial.o | grep ' pluginEntry$'
       - uses: actions/upload-artifact@v4
         with:
-          name: loopydial-native-name-gnu-arm
-          path: tmp-loopydial-native/plugins/loopydial.o
+          name: loopydial-numbered-gnu-arm
+          path: tmp-loopydial-numbered/plugins/loopydial.o
