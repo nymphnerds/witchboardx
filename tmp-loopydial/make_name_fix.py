@@ -3,7 +3,6 @@ from pathlib import Path
 p = Path('tmp-loopydial/loopydial.cpp')
 s = p.read_text()
 
-# Add normal NT parameters for profile-name editing. No custom encoder/push takeover.
 s = s.replace(
     '    kHome,\n    kMidiChannel,',
     '    kHome,\n    kProfileName,\n    kNamePosition,\n    kNameCharacter,\n    kMidiChannel,')
@@ -163,9 +162,8 @@ new_ps = '''static int parameterString(_NT_algorithm* algorithm, int parameter, 
 '''
 s = s.replace(old_ps, new_ps)
 
-# Do not override any knobs, encoders, or encoder pushes. Use the host's standard parameter UI.
 start = s.index('static uint32_t hasCustomUi')
-end = s.index('static bool newlyPressed', start)
+end = s.index('static void customUi', start)
 s = s[:start] + '''static uint32_t hasCustomUi(_NT_algorithm*) {
     return 0;
 }
@@ -179,7 +177,6 @@ s = s[:start] + '''static void customUi(_NT_algorithm*, const _NT_uiData&) {
 
 ''' + s[end:]
 
-# Keep the normal display, but remove instructions for custom controls.
 s = s.replace(
     '    if (self->editingName)\n        NT_drawText(4, 55, "B2 done  L char  R cursor", 12, kNT_textLeft, kNT_textTiny);\n    else\n        NT_drawText(4, 55, "L select/push Home  B2 rename", 12, kNT_textLeft, kNT_textTiny);',
     '    NT_drawText(4, 55, "Edit Name position + Name character", 12, kNT_textLeft, kNT_textTiny);')
