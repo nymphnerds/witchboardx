@@ -1,0 +1,49 @@
+name: Temporary Loopy Dial native-name build
+on:
+  push:
+    branches: [tmp-loopydial-full-api]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install ARM GNU toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi libstdc++-arm-none-eabi-dev
+      - name: Fetch verified disting NT API
+        run: |
+          git init ../distingNT_API
+          git -C ../distingNT_API remote add origin https://github.com/expertsleepersltd/distingNT_API.git
+          git -C ../distingNT_API fetch --depth 1 origin 5a4910d1d4233180114d6aee5ddaa4b8aec577e8
+          git -C ../distingNT_API checkout --detach FETCH_HEAD
+      - name: Apply profile-name fix
+        run: python3 tmp-loopydial/make_name_fix.py
+      - name: Build full Loopy Dial
+        run: |
+          mkdir -p tmp-loopydial-native/plugins
+          arm-none-eabi-c++ \
+            -std=c++11 \
+            -mcpu=cortex-m7 \
+            -mfpu=fpv5-d16 \
+            -mfloat-abi=hard \
+            -mthumb \
+            -Os \
+            -fPIC \
+            -fno-rtti \
+            -fno-exceptions \
+            -Wall -Wextra -Werror \
+            -I../distingNT_API/include \
+            -c tmp-loopydial/loopydial.cpp \
+            -o tmp-loopydial-native/plugins/loopydial.o
+      - name: Inspect object
+        run: |
+          file tmp-loopydial-native/plugins/loopydial.o
+          arm-none-eabi-size -B tmp-loopydial-native/plugins/loopydial.o
+          arm-none-eabi-nm tmp-loopydial-native/plugins/loopydial.o | grep ' pluginEntry$'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: loopydial-native-name-gnu-arm
+          path: tmp-loopydial-native/plugins/loopydial.o
