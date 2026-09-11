@@ -2,7 +2,7 @@
 SHELL := /bin/sh
 .DELETE_ON_ERROR:
 
-NT_API_PATH ?= $(firstword $(wildcard ../distingNT_API-v119 ../distingNT_API ../../distingNT_API) ../distingNT_API)
+NT_API_PATH ?= $(firstword $(wildcard ../distingNT_API ../../distingNT_API ../distingNT_API-v119) ../distingNT_API)
 INCLUDE_PATH := $(NT_API_PATH)/include
 API_HEADER := $(INCLUDE_PATH)/distingnt/api.h
 

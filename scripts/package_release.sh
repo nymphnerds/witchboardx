@@ -16,10 +16,10 @@ cp "$repo_root/scripts/migrate_v134_preset.py" "$staging_dir/"
 mkdir -p "$staging_dir/presets"
 cp "$repo_root/presets/WitchboardX.json" "$staging_dir/presets/"
 printf '%s\n' \
-    "WitchboardX v1.0 - 11 channels, trigger ducker and output latency alignment" \
-    "Copy programs/plug-ins/WitchboardX.o to the same path on the disting NT MicroSD card." \
+    "WitchboardX v1.0 - 11 channels, trigger ducker and output latency alignment." \
+    "Copy programs/plug-ins/*.o to the same path on the disting NT MicroSD card." \
     "The plug-in appears as 'WitchboardX' and uses GUID WtbX." \
-    "Requires disting NT v1.19 beta with DRAM cold-code/serialisation support (API v13); beta currently available only via Discord." \
+    "Built as a no-DRAM firmware-safe release for disting NT v1.18 or later." \
     "The optional presets/WitchboardX.json example is aligned for 11 channels; its sample files and external hardware are not included." \
     "Migrate older Witchboard presets before loading: python3 migrate_v134_preset.py old.json new.json" \
     "Migration preserves channel/routing mappings, removes EQ/old ducker mappings and switches Sidechain off." \

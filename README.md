@@ -2,8 +2,8 @@
 
 # WitchboardX
 
-> **Firmware requirement: disting NT v1.19 beta, currently available only via Discord.**
-> Witchboard places cold code, including preset serialisation code, in DRAM and requires this firmware support.
+> **Firmware requirement: disting NT v1.18 or later.**
+> This release is built without the experimental v1.19 beta DRAM cold-code placement.
 
 Witchboard is a routing mixer and serial patchbay plug-in for the Expert Sleepers
 disting NT.
@@ -475,10 +475,11 @@ mappings. It removes EQ and obsolete ducker mappings, resets the new ducker to
 its initial settings with Sidechain Off, and preserves Trigger Input and Depth.
 It writes a new file and refuses to overwrite an existing destination. Already converted presets pass through unchanged.
 
-## disting NT v1.19 Beta / DRAM Code Placement
+## Optional v1.19 Beta DRAM Code Placement
 
-For development builds targeting the first disting NT **v1.19 beta**, the
-Expert Sleepers API now supports placing selected plug-in functions in DRAM:
+The shipped release is the no-DRAM v1.18-safe build. For experimental
+development builds targeting disting NT **v1.19 beta**, the Expert Sleepers API
+supports placing selected plug-in functions in DRAM:
 
 ```cpp
 _NT_DRAM_SECTION
@@ -491,17 +492,15 @@ void someColdFunction(...)
 `_NT_DRAM_SECTION` maps the function to the `._nt_dram` section.
 
 Witchboard should use this only for cold/setup/UI/preset code where appropriate,
-while keeping the real-time audio path in fast code memory. This preserves
-scarce instruction-memory headroom for the filter, ducker and routing/latency
-processing.
+while keeping the real-time audio path in fast code memory.
 
 API:
 https://github.com/expertsleepersltd/distingNT_API
 
-### Current Witchboard DRAM-placement plan
+### Experimental Witchboard DRAM-placement plan
 
-The current ARM build suggests roughly **3 KiB** of fast code can be recovered
-conservatively by moving cold functions to DRAM first.
+The experimental ARM build suggested roughly **3 KiB** of fast code could be
+recovered conservatively by moving cold functions to DRAM first.
 
 Primary candidates:
 
@@ -525,8 +524,8 @@ audio path, including the filter, ducker and live delay handling.
 
 ## Building
 
-The Makefile first looks for the v1.19 API at `../distingNT_API-v119`, then
-`../distingNT_API` and `../../distingNT_API`. The header must support `_NT_DRAM_SECTION`.
+The Makefile first looks for the stable API at `../distingNT_API` and
+`../../distingNT_API`, then falls back to `../distingNT_API-v119`.
 
 ```sh
 make

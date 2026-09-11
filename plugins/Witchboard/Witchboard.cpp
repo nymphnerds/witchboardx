@@ -8,7 +8,12 @@
 #include <distingnt/serialisation.h>
 
 #ifndef _NT_DRAM_SECTION
-#error "Witchboard requires the v1.19 DRAM-placement API; set NT_API_PATH to an updated checkout"
+#define _NT_DRAM_SECTION
+#endif
+
+#ifndef WITCHBOARD_ENABLE_DRAM_CODE
+#undef _NT_DRAM_SECTION
+#define _NT_DRAM_SECTION
 #endif
 
 namespace

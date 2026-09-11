@@ -12,7 +12,7 @@ arm_readelf="${ARM_READELF:-arm-none-eabi-readelf}"
 arm_size="${ARM_SIZE:-arm-none-eabi-size}"
 arm_objdump="${ARM_OBJDUMP:-arm-none-eabi-objdump}"
 
-allowed_undefined='^(NT_algorithmIndex|NT_parameterOffset|NT_setParameterFromAudio|NT_globals|_ZN13_NT_jsonParse6numberERi|_ZN14_NT_jsonStream9addNumberEi|_GLOBAL_OFFSET_TABLE_|memset|strlen|powf|sqrtf|_ZN13_NT_jsonParse10skipMemberEv|_ZN13_NT_jsonParse21numberOfArrayElementsERi|_ZN13_NT_jsonParse21numberOfObjectMembersERi|_ZN13_NT_jsonParse6stringERPKc|_ZN13_NT_jsonParse9matchNameEPKc|_ZN14_NT_jsonStream10closeArrayEv|_ZN14_NT_jsonStream10openObjectEv|_ZN14_NT_jsonStream11closeObjectEv|_ZN14_NT_jsonStream13addMemberNameEPKc|_ZN14_NT_jsonStream9addStringEPKc|_ZN14_NT_jsonStream9openArrayEv)$'
+allowed_undefined='^(NT_algorithmIndex|NT_parameterOffset|NT_setParameterFromAudio|NT_updateParameterDefinition|NT_sendMidi3ByteMessage|NT_globals|_ZN13_NT_jsonParse6numberERi|_ZN14_NT_jsonStream9addNumberEi|_GLOBAL_OFFSET_TABLE_|memcpy|memset|strlen|powf|sqrtf|_ZN13_NT_jsonParse10skipMemberEv|_ZN13_NT_jsonParse21numberOfArrayElementsERi|_ZN13_NT_jsonParse21numberOfObjectMembersERi|_ZN13_NT_jsonParse6stringERPKc|_ZN13_NT_jsonParse9matchNameEPKc|_ZN14_NT_jsonStream10closeArrayEv|_ZN14_NT_jsonStream10openObjectEv|_ZN14_NT_jsonStream11closeObjectEv|_ZN14_NT_jsonStream13addMemberNameEPKc|_ZN14_NT_jsonStream9addStringEPKc|_ZN14_NT_jsonStream9openArrayEv)$'
 
 for object in "$@"; do
     header="$($arm_readelf -h "$object")"
@@ -36,7 +36,11 @@ for object in "$@"; do
         exit 1
     fi
 
-    python3 "$(dirname "$0")/inspect_dram_placement.py" "$object" --objdump "$arm_objdump"
+    if "$arm_readelf" -S "$object" | grep -q '._nt_dram'; then
+        python3 "$(dirname "$0")/inspect_dram_placement.py" "$object" --objdump "$arm_objdump"
+    else
+        echo "$object: no ._nt_dram section; no-DRAM firmware-safe build"
+    fi
 
     echo "$object: ELF32 little-endian ARM relocatable; pluginEntry present"
     "$arm_size" -A "$object"

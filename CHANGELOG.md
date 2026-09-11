@@ -4,8 +4,9 @@
 
 WitchboardX is a separate NT Gallery plugin using GUID `WtbX`; the original
 Witchboard retains GUID `WtC1` and its own version history. This is a normal
-release, not a prerelease. It requires disting NT v1.19 beta for DRAM cold-code
-and serialisation support.
+release, not a prerelease. The default build is now a no-DRAM firmware-safe
+build for disting NT v1.18 or later; the v1.19 beta DRAM cold-code path is kept
+as an explicit development option.
 
 Includes 11 stereo channels, trigger ducking, Main lookahead, Bypass Offset,
 master filter, serial inserts, FX sends and the aligned example preset.
