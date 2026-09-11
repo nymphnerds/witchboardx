@@ -51,13 +51,27 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" \
-            release/WitchboardX.o \
-            release/WitchboardX.zip \
-            release/release.zip \
-            --verify-tag \
-            --title "WitchboardX ${GITHUB_REF_NAME}" \
-            --latest \
-            --draft=false \
-            --prerelease=false \
-            --notes-file .github/release-notes.md
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release edit "${GITHUB_REF_NAME}" \
+              --title "WitchboardX ${GITHUB_REF_NAME}" \
+              --latest \
+              --draft=false \
+              --prerelease=false \
+              --notes-file .github/release-notes.md
+            gh release upload "${GITHUB_REF_NAME}" \
+              release/WitchboardX.o \
+              release/WitchboardX.zip \
+              release/release.zip \
+              --clobber
+          else
+            gh release create "${GITHUB_REF_NAME}" \
+              release/WitchboardX.o \
+              release/WitchboardX.zip \
+              release/release.zip \
+              --verify-tag \
+              --title "WitchboardX ${GITHUB_REF_NAME}" \
+              --latest \
+              --draft=false \
+              --prerelease=false \
+              --notes-file .github/release-notes.md
+          fi
