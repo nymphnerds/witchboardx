@@ -16,10 +16,10 @@ Example:
 
 ```json
 "loopyDialNames": [
-  "Intro",
-  "Main",
-  "Breakdown",
-  "Outro"
+  "Performance",
+  "Mixer",
+  "Instruments",
+  "Effects"
 ]
 ```
 
