@@ -474,19 +474,17 @@ Displayed value = Pico MMF
 `witchboardNames.slots` is only needed when a preset wants to override that
 automatic display. Empty strings, missing slot names, or the default strings
 `Slot 1`, `Slot 2` and `Slot 3` mean "auto-name from the assigned route".
-Non-empty custom labels such as `Pedalboard` or `Filter chain` override the
-route-derived display.
 
 Example:
 
 ```json
 "witchboardNames": {
   "channels": ["Kick", "Snare", "Hats", "Perc"],
-  "routes": ["Percall 1", "Pico MMF", "Steve's MS-22", "Kirbinator", "Spare"],
-  "fx": ["Radiant", "iPad Send"],
+  "routes": ["Percall 1", "Pico MMF", "Steve's MS-22", "Kirbinator", "Unused"],
+  "fx": ["Radiant", "Main FX 2"],
   "slots": [
     ["Dry", "", "", ""],
-    ["Dry", "Pedalboard", "", ""]
+    ["Dry", "", "", ""]
   ]
 }
 ```
@@ -545,8 +543,8 @@ Minimal shape inside the `WtbX` slot:
   "specs": [11, 0, 0],
   "witchboardNames": {
     "channels": ["Kick", "Snare"],
-    "routes": ["Percall 1", "Pico MMF", "Steve's MS-22", "Kirbinator", "Spare"],
-    "fx": ["Radiant", "iPad Send"]
+    "routes": ["Percall 1", "Pico MMF", "Steve's MS-22", "Kirbinator", "Unused"],
+    "fx": ["Radiant", "Main FX 2"]
   },
   "name": "MAIN WITCHBOARD        ",
   "parameters": [ ... ]
@@ -579,15 +577,15 @@ Full naming example:
     "Pico MMF",
     "Steve's MS-22",
     "Kirbinator",
-    "Spare"
+    "Unused"
   ],
   "fx": [
     "Radiant",
-    "iPad Send"
+    "Main FX 2"
   ],
   "slots": [
     ["Dry", "", "", ""],
-    ["Dry", "Pedalboard", "", ""]
+    ["Dry", "", "", ""]
   ]
 }
 ```
@@ -604,7 +602,7 @@ through Route E.
 
 `slots` is optional. Empty strings, missing slot entries, or the default strings
 `Slot 1`, `Slot 2` and `Slot 3` mean "auto-name from the route assigned to that
-slot". A non-empty custom label overrides the route-derived display.
+slot".
 
 Slot arrays are arranged as:
 
@@ -628,17 +626,17 @@ With that setup, the Disting displays the assigned route name. For example, if
 `Insert 1 Slot 1` points to Route B and Route B is named `Pico MMF`, selecting
 Slot 1 displays `Pico MMF`.
 
-Use a real slot name only when you want to override the assignment-derived label:
+The baseline preset currently uses the default strings:
 
 ```json
 "slots": [
-  ["Dry", "", "Pedalboard", ""],
-  ["Dry", "", "", ""]
+  ["Dry", "Slot 1", "Slot 2", "Slot 3"],
+  ["Dry", "Slot 1", "Slot 2", "Slot 3"]
 ]
 ```
 
-That makes Insert 1 Slot 2 display `Pedalboard` no matter which route is assigned
-to that slot.
+In WitchboardX those default slot strings still keep auto naming active, so the
+display follows the assigned route names.
 
 Actual baseline example from
 [presets/WitchboardX.json](presets/WitchboardX.json):
