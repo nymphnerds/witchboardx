@@ -10,7 +10,7 @@ ARM_ARCH := -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -mthumb
 ARM_FLAGS := -std=c++11 $(ARM_ARCH) -Os -fPIC -fno-rtti -fno-exceptions -Wall -Wextra -Werror
 
 SOURCE := loopy_profile_selector.cpp
-OUTPUT := dial.o
+OUTPUT := LoopyDial.o
 
 .PHONY: all check-api clean
 

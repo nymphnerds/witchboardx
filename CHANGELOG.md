@@ -1,5 +1,26 @@
 # Changelog
 
+## v1.0.2 — JSON naming and release polish
+
+- Add JSON-backed WitchboardX channel names under `witchboardNames.channels`.
+  Custom names now label channel pages and parameter UI prefixes, with safe
+  truncation for the NT prefix buffer.
+- Make insert selector labels derive from their assigned route names by default.
+  Explicit `witchboardNames.slots` entries still override this; empty or default
+  slot labels mean "auto-name from assignment".
+- Change the Insert 1/2 selector parameters from enum-string display to
+  `kNT_unitHasStrings`, so the disting NT actually requests those derived labels
+  instead of continuing to show `Slot 1`, `Slot 2` and `Slot 3`.
+- Extend host tests for channel-name display, JSON round-trip, slot override
+  preservation and assignment-derived slot labels.
+- Update the baseline `presets/WitchboardX.json` with the current channel,
+  route and FX names so it can act as the release backup/example preset.
+- Refresh the README as a user-facing document, add the new patch example image
+  and document the JSON naming workflow with the actual baseline naming block.
+- Rename the private Loopy profile-selector backup under `Dial/` to `LoopyDial`
+  and build it as `LoopyDial.o`; the WitchboardX Gallery entry remains focused
+  on GUID `WtbX`.
+
 ## v1.0.0 — first WitchboardX release
 
 WitchboardX is a separate NT Gallery plugin using GUID `WtbX`; the original
@@ -12,6 +33,65 @@ Includes 11 stereo channels, trigger ducking, Main lookahead, Bypass Offset,
 master filter, serial inserts, FX sends and the aligned example preset.
 The v1.34–v1.37 entries below are implementation handoff revisions, not
 WitchboardX public release versions.
+
+JoyDuck-derived ducker work included in WitchboardX:
+
+- Replaced the earlier compressor/sidechain model with a trigger-driven inverse
+  envelope VCA on the Main path. Bypass remains outside the duck and can rejoin
+  later through the selected master-output mode.
+- Removed the old sidechain mode set, Attack/Hold/Release/Makeup controls and
+  power-curve behaviour in favour of a compact performance control set:
+  `Sidechain`, `SC Trigger Input`, `SC Depth`, `SC Lookahead`, `SC Env Length`,
+  `SC Curve` and `SC Smooth`.
+- Implemented the JoyDuck-inspired musical shape as a normalized recovery
+  envelope: each trigger starts at deepest duck and rises back to unity over the
+  logarithmic envelope length.
+- Added signed curve shaping where negative values recover quickly from the
+  deepest duck then ease toward unity, positive values hold the duck longer, and
+  zero is linear.
+- Added JoyDuck-style smoothing as a 0–200 ms linear ramp with a locked mapping
+  of 2 ms per percent, so `SC Smooth` can soften the start of the duck without
+  adding extra compressor parameters.
+- Added Main lookahead using a fixed stereo delay ring, so the duck can begin
+  before the transient reaches the Main VCA while Bypass remains latency-aligned
+  through Bypass Offset.
+- Saved and restored the effective Bypass Offset trim so changing mapped
+  Lookahead values does not destroy the user's manual alignment.
+
+Master filter work included in WitchboardX:
+
+- Kept the master filter as a dedicated DJ-style performance filter after the
+  Main duck stage, with `Filter enable`, `HP limit`, `LP limit`, `Filter Q` and
+  bipolar `Filter sweep`.
+- Implemented the filter as a stereo topology-preserving state-variable filter
+  based on the Matthijs Hollemans / Cytomic SVF approach documented in the
+  README credits.
+- Made `Filter sweep` bipolar around a clean centre: negative values sweep
+  low-pass, `0` bypasses the filter, and positive values sweep high-pass.
+- Added independent low-pass and high-pass limits so each side of the sweep can
+  be constrained for performance use instead of always travelling to extremes.
+- Preserved the filter through Split, Sum and Insert master-output modes, with
+  filter state reset when the filter is inactive to avoid stale state on re-entry.
+- Locked the shipped factory defaults to Filter Off, Q 10, LP limit 20%, HP
+  limit 70% and Sweep 0, while preserving saved preset values and mappings.
+
+Firmware 1.18 compatibility work:
+
+- Ship the default `WitchboardX.o` as a disting NT v1.18-safe object, with no
+  required v1.19 beta DRAM cold-code placement.
+- Keep `_NT_DRAM_SECTION` annotations in the source, but compile them away unless
+  `WITCHBOARD_ENABLE_DRAM_CODE` is explicitly defined for experimental v1.19
+  beta builds.
+- Keep the real-time DSP path in normal executable code; only construction,
+  preset serialisation, UI string helpers and `pluginEntry()` are marked as
+  optional cold-code candidates for future v1.19 beta experiments.
+- Retain per-instance data DRAM allocation for channel pages, channel runtime
+  state and the fixed Main/Bypass stereo delay rings. This is normal v1.18 API
+  data allocation, not DRAM code placement.
+- Lock the released 11-channel layout to 234 parameters, below the observed
+  241-parameter firmware limit, leaving seven spare parameters.
+- Validate the host build across 32/44.1/48/96 kHz and build the ARM object with
+  the default no-DRAM-code configuration.
 
 ## v1.37 — eleven channels, output-page alignment and locked defaults
 

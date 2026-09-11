@@ -396,6 +396,7 @@ struct WitchboardAlgorithm : public _NT_algorithm
 	float cachedSampleRate, curveBeta;
 	SmoothedValue masterGain;
 	bool masterGainInitialised;
+	char channelNames[kMaxChannels][kHardwareNameLength];
 	char routeNames[kNumRoutes][kHardwareNameLength];
 	char fxNames[2][kHardwareNameLength];
 	char slotNames[kNumInserts][kNumInsertStates][kSlotNameLength];
@@ -503,6 +504,33 @@ void copyText(char* destination, int capacity, const char* source)
 	destination[i] = 0;
 }
 
+bool textEquals(const char* a, const char* b)
+{
+	if (!a)
+		a = "";
+	if (!b)
+		b = "";
+	while (*a && *b)
+	{
+		if (*a != *b)
+			return false;
+		++a;
+		++b;
+	}
+	return *a == *b;
+}
+
+bool isDefaultChannelName(const WitchboardAlgorithm* self, int channel)
+{
+	return textEquals(self->channelNames[channel], channelPageNames[channel]);
+}
+
+bool isAutoSlotName(const char* name, int insert, int state)
+{
+	return state != kInsertDry
+		&& (!name || !name[0] || textEquals(name, defaultSlotNames[insert][state]));
+}
+
 void setParameter(_NT_parameter& parameter, const char* name, int minimum, int maximum,
 	int defaultValue, uint8_t unit, char const* const* strings = NULL)
 {
@@ -533,14 +561,20 @@ void setWidth(_NT_parameter& parameter, const char* name, int defaultValue)
 
 void WitchboardAlgorithm::setDefaultNames()
 {
+	for (int channel = 0; channel < kMaxChannels; ++channel)
+		copyText(channelNames[channel], kHardwareNameLength, channelPageNames[channel]);
 	for (int route = 0; route < kNumRoutes; ++route)
 		copyText(routeNames[route], kHardwareNameLength, defaultRouteNames[route]);
 	for (int fx = 0; fx < 2; ++fx)
 		copyText(fxNames[fx], kHardwareNameLength, defaultFxNames[fx]);
 	for (int insert = 0; insert < kNumInserts; ++insert)
+	{
+		copyText(slotNames[insert][kInsertDry], kSlotNameLength,
+			defaultSlotNames[insert][kInsertDry]);
 		for (int state = 0; state < kNumInsertStates; ++state)
-			copyText(slotNames[insert][state], kSlotNameLength,
-				defaultSlotNames[insert][state]);
+			if (state != kInsertDry)
+				copyText(slotNames[insert][state], kSlotNameLength, "");
+	}
 }
 
 void buildParameters()
@@ -636,7 +670,7 @@ void buildParameters()
 			channelSuffixes[kChannelGain], -60, 6, 0, kNT_unitDb_minInf);
 		setParameter(parameterDefs[base + kChannelInsert1],
 			channelSuffixes[kChannelInsert1], 0, kInsertParameterMax, 0,
-			kNT_unitEnum, insertStateStrings);
+			kNT_unitHasStrings);
 		for (int slot = 0; slot < 3; ++slot)
 			setParameter(parameterDefs[base + kChannelInsert1Slot1 + slot],
 				channelSuffixes[kChannelInsert1Slot1 + slot], 0, kNumRoutes - 1,
@@ -645,7 +679,7 @@ void buildParameters()
 			channelSuffixes[kChannelFx1Mix], 0, 100, 0, kNT_unitPercent);
 		setParameter(parameterDefs[base + kChannelInsert2],
 			channelSuffixes[kChannelInsert2], 0, kInsertParameterMax, 0,
-			kNT_unitEnum, insertStateStrings);
+			kNT_unitHasStrings);
 		for (int slot = 0; slot < 3; ++slot)
 			setParameter(parameterDefs[base + kChannelInsert2Slot1 + slot],
 				channelSuffixes[kChannelInsert2Slot1 + slot], 0, kNumRoutes - 1,
@@ -707,7 +741,7 @@ void WitchboardAlgorithm::buildPages()
 		for (int i = 0; i < kNumChannelParams; ++i)
 			channelPages[channel][i] = base + i;
 		pageDefs[page++] = {
-			.name = channelPageNames[channel],
+			.name = channelNames[channel],
 			.numParams = kNumChannelParams,
 			.group = static_cast<uint8_t>(6 + channel),
 			.unused = { 0, 0 },
@@ -1587,6 +1621,11 @@ void serialise(_NT_algorithm* algorithm, _NT_jsonStream& stream)
 
 	stream.addMemberName("witchboardNames");
 	stream.openObject();
+		stream.addMemberName("channels");
+		stream.openArray();
+		for (int channel = 0; channel < self->numChannels; ++channel)
+			stream.addString(self->channelNames[channel]);
+		stream.closeArray();
 		stream.addMemberName("routes");
 		stream.openArray();
 		for (int route = 0; route < kNumRoutes; ++route)
@@ -1603,7 +1642,12 @@ void serialise(_NT_algorithm* algorithm, _NT_jsonStream& stream)
 		{
 			stream.openArray();
 			for (int state = 0; state < kNumInsertStates; ++state)
-				stream.addString(self->slotNames[insert][state]);
+			{
+				if (isAutoSlotName(self->slotNames[insert][state], insert, state))
+					stream.addString("");
+				else
+					stream.addString(self->slotNames[insert][state]);
+			}
 			stream.closeArray();
 		}
 		stream.closeArray();
@@ -1680,7 +1724,12 @@ bool deserialise(_NT_algorithm* algorithm, _NT_jsonParse& parse)
 			return false;
 		for (int nameMember = 0; nameMember < nameMembers; ++nameMember)
 		{
-			if (parse.matchName("routes"))
+			if (parse.matchName("channels"))
+			{
+				if (!parseNames(parse, self->channelNames, self->numChannels))
+					return false;
+			}
+			else if (parse.matchName("routes"))
 			{
 				if (!parseNames(parse, self->routeNames, kNumRoutes))
 					return false;
@@ -1718,6 +1767,39 @@ int copyParameterString(char* buffer, const char* text)
 	return strlen(buffer);
 }
 
+int channelForParameter(int parameter, const WitchboardAlgorithm* self)
+{
+	if (parameter < kNumGlobalParams
+		|| parameter >= kNumGlobalParams + self->numChannels * kNumChannelParams)
+		return -1;
+	return (parameter - kNumGlobalParams) / kNumChannelParams;
+}
+
+int insertSlotAssignmentParameter(int insert, int state)
+{
+	if (state <= kInsertDry || state >= kNumInsertStates)
+		return -1;
+	return (insert == 0 ? kChannelInsert1Slot1 : kChannelInsert2Slot1) + state - 1;
+}
+
+const char* insertStateLabel(const WitchboardAlgorithm* self, int parameter,
+	int insert, int state)
+{
+	if (state == kInsertDry)
+		return defaultSlotNames[insert][kInsertDry];
+	if (!isAutoSlotName(self->slotNames[insert][state], insert, state))
+		return self->slotNames[insert][state];
+	const int channel = channelForParameter(parameter, self);
+	const int assignmentOffset = insertSlotAssignmentParameter(insert, state);
+	if (channel >= 0 && assignmentOffset >= 0 && self->v)
+	{
+		const int route = clampInt(self->v[channelBase(channel) + assignmentOffset],
+			0, kNumRoutes - 1);
+		return self->routeNames[route];
+	}
+	return defaultSlotNames[insert][state];
+}
+
 _NT_DRAM_SECTION
 int parameterString(_NT_algorithm* algorithm, int parameter, int value, char* buffer)
 {
@@ -1733,7 +1815,8 @@ int parameterString(_NT_algorithm* algorithm, int parameter, int value, char* bu
 	{
 		const int insert = offset == kChannelInsert1 ? 0 : 1;
 		const int state = insertParameterToState(value);
-		return copyParameterString(buffer, self->slotNames[insert][state]);
+		return copyParameterString(buffer,
+			insertStateLabel(self, parameter, insert, state));
 	}
 
 	if ((offset >= kChannelInsert1Slot1 && offset <= kChannelInsert1Slot3)
@@ -1755,6 +1838,17 @@ int parameterUiPrefix(_NT_algorithm* algorithm, int parameter, char* buffer)
 		return 0;
 
 	const int channel = (parameter - kNumGlobalParams) / kNumChannelParams + 1;
+	const int channelIndex = channel - 1;
+	if (!isDefaultChannelName(self, channelIndex))
+	{
+		int length = 0;
+		const char* name = self->channelNames[channelIndex];
+		for (; name[length] && length < kNT_parameterUiPrefixSize - 2; ++length)
+			buffer[length] = name[length];
+		buffer[length++] = ':';
+		buffer[length] = 0;
+		return length;
+	}
 	int length = 0;
 	if (channel >= 10)
 		buffer[length++] = '1';

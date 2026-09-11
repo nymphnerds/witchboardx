@@ -344,7 +344,7 @@ static void serialise(_NT_algorithm* algorithm, _NT_jsonStream& stream)
 {
     LoopyProfileSelector* self = static_cast<LoopyProfileSelector*>(algorithm);
 
-    stream.addMemberName("dialNames");
+    stream.addMemberName("loopyDialNames");
     stream.openArray();
     for (int i = 0; i < kMaxProfiles; ++i)
         stream.addString(self->profileNames[i]);
@@ -361,7 +361,7 @@ static bool deserialise(_NT_algorithm* algorithm, _NT_jsonParse& parse)
         return false;
 
     for (int member = 0; member < members; ++member) {
-        if (!parse.matchName("dialNames")) {
+        if (!parse.matchName("loopyDialNames") && !parse.matchName("dialNames")) {
             if (!parse.skipMember())
                 return false;
             continue;
@@ -385,7 +385,7 @@ static bool deserialise(_NT_algorithm* algorithm, _NT_jsonParse& parse)
 
 static const _NT_factory kFactory = {
     NT_MULTICHAR('L', 'P', 'r', 'f'),
-    "Dial",
+    "LoopyDial",
     "Loopy Pro control profile selector",
     0,
     NULL,

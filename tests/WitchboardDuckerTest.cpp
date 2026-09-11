@@ -183,6 +183,7 @@ void testAutoFollow()
  f.v[kParamSidechainMode]=0; f.tick(); assert(f.v[kParamBypassOffset]==0);
  assert(f.alg->manualTrim==-100);
  // A negative trim survives SC OFF, preset save/load, then SC ON.
+ copyText(f.alg->channelNames[0],kHardwareNameLength,"Kick");
  copyText(f.alg->routeNames[0],kHardwareNameLength,"iPad insert");
  copyText(f.alg->fxNames[1],kHardwareNameLength,"Stereo delay");
  copyText(f.alg->slotNames[1][2],kSlotNameLength,"Pedal");
@@ -195,6 +196,8 @@ void testAutoFollow()
  assert(restored.alg->manualTrim==-100);
  restored.v[kParamSidechainMode]=1; restored.tick();
  assert(restored.v[kParamBypassOffset]==0);
+ assert(strcmp(restored.alg->channelNames[0],"Kick")==0);
+ assert(strcmp(restored.alg->parameterPages->pages[5].name,"Kick")==0);
  assert(strcmp(restored.alg->routeNames[0],"iPad insert")==0);
  assert(strcmp(restored.alg->fxNames[1],"Stereo delay")==0);
  assert(strcmp(restored.alg->slotNames[1][2],"Pedal")==0);

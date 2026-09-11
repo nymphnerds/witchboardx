@@ -3,7 +3,6 @@
 # WitchboardX
 
 > **Firmware requirement: disting NT v1.18 or later.**
-> This release is built without the experimental v1.19 beta DRAM cold-code placement.
 
 Witchboard is a routing mixer and serial patchbay plug-in for the Expert Sleepers
 disting NT.
@@ -102,8 +101,8 @@ to this source design.
 ### Trigger ducker — JoyDuck-derived envelope
 
 The ducker uses a single curved recovery envelope, linear-ramp smoothing,
-and linear VCA depth. Its curve coefficient mapping follows the handoff's
-Max-community recurrence candidate; it is not claimed to be an exact Max clone.
+and linear VCA depth. It is JoyDuck-inspired, but it is not claimed to be an
+exact Max clone.
 
 **Why Witchboard chose it:** the goal was not to add another conventional
 compressor. Witchboard only needs a very good trigger-driven pump that is fast
@@ -181,7 +180,7 @@ round trip affects both branches equally after they have recombined.
 
 ## Patch Example
 
-![WitchboardX patch example](assets/patch3.png)
+![WitchboardX patch example](assets/PatchExample.png)
 
 ## Channel Controls
 
@@ -236,7 +235,11 @@ The extra top value keeps common four-position MIDI controls such as
 `0 / 42 / 85 / 127` landing cleanly on Dry / Slot 1 / Slot 2 / Slot 3 when the
 NT mapping range is set to `0..4`.
 
-Each slot can point independently to Route A-E.
+Each slot can point independently to Route A-E. In the parameter display, the
+insert selector asks Witchboard for a custom value string and uses the assigned
+route name for the selected slot. For example, if `Insert 1 Slot 1` points to
+Route B and Route B is named `Pico MMF`, selecting `Slot 1` displays `Pico MMF`
+rather than the generic `Slot 1` label.
 
 `Repeat protection` prevents the same route being used twice in series on one
 channel. When protection is Off, the same route may deliberately be selected in
@@ -442,16 +445,51 @@ Channel gain, insert switching and FX-send moves use this smoothing system.
 
 ## Preset Naming
 
-Witchboard can store preset-specific display names for routes, FX sends and slot
-states.
+Witchboard can store preset-specific display names for channels, routes, FX sends
+and optional slot-state overrides.
 
 ```text
+witchboardNames.channels
 witchboardNames.routes
 witchboardNames.fx
 witchboardNames.slots
 ```
 
 These names affect the UI only; routing behaviour remains generic.
+
+`witchboardNames.channels` names the channel pages and the parameter UI prefixes.
+If a preset has fewer channel names than active channels, missing names fall back
+to `Channel 1`, `Channel 2` and so on.
+
+Slot names are normally automatic. For each channel, `Insert 1` and `Insert 2`
+look at the selected slot's route assignment and display that route's name:
+
+```text
+Insert 1 Slot 1 = Route B
+Route B name    = Pico MMF
+Insert 1 state  = Slot 1
+Displayed value = Pico MMF
+```
+
+`witchboardNames.slots` is only needed when a preset wants to override that
+automatic display. Empty strings, missing slot names, or the default strings
+`Slot 1`, `Slot 2` and `Slot 3` mean "auto-name from the assigned route".
+Non-empty custom labels such as `Pedalboard` or `Filter chain` override the
+route-derived display.
+
+Example:
+
+```json
+"witchboardNames": {
+  "channels": ["Kick", "Snare", "Hats", "Perc"],
+  "routes": ["Percall 1", "Pico MMF", "Steve's MS-22", "Kirbinator", "Spare"],
+  "fx": ["Radiant", "iPad Send"],
+  "slots": [
+    ["Dry", "", "", ""],
+    ["Dry", "Pedalboard", "", ""]
+  ]
+}
+```
 
 ## Installation
 
@@ -475,139 +513,176 @@ mappings. It removes EQ and obsolete ducker mappings, resets the new ducker to
 its initial settings with Sidechain Off, and preserves Trigger Input and Depth.
 It writes a new file and refuses to overwrite an existing destination. Already converted presets pass through unchanged.
 
-## Optional v1.19 Beta DRAM Code Placement
+## JSON Naming Guide
 
-The shipped release is the no-DRAM v1.18-safe build. For experimental
-development builds targeting disting NT **v1.19 beta**, the Expert Sleepers API
-supports placing selected plug-in functions in DRAM:
+WitchboardX stores its private display labels in the preset JSON under
+`witchboardNames`. These names are not normal NT parameters; edit them in JSON
+and reload the preset.
 
-```cpp
-_NT_DRAM_SECTION
-void someColdFunction(...)
+The safest workflow is:
+
+1. Save the preset from the disting NT.
+2. Make a backup copy of the JSON before editing.
+3. Open the preset JSON in a text editor that preserves plain text.
+4. Search for `"guid": "WtbX"`. This is the WitchboardX slot.
+5. In that same slot, find or add `"witchboardNames"`.
+6. Edit only the strings inside `channels`, `routes`, `fx` and optional `slots`.
+7. Validate the JSON if possible, then copy it back to the disting NT and reload
+   the preset.
+
+The repository preset [presets/WitchboardX.json](presets/WitchboardX.json) is a
+working example with channel names, route names and FX names already present.
+
+Do not move or renumber the large `parameters` array by hand unless you are
+deliberately editing parameter values. Names live beside that array, not inside
+it.
+
+Minimal shape inside the `WtbX` slot:
+
+```json
 {
-    ...
+  "guid": "WtbX",
+  "specs": [11, 0, 0],
+  "witchboardNames": {
+    "channels": ["Kick", "Snare"],
+    "routes": ["Percall 1", "Pico MMF", "Steve's MS-22", "Kirbinator", "Spare"],
+    "fx": ["Radiant", "iPad Send"]
+  },
+  "name": "MAIN WITCHBOARD        ",
+  "parameters": [ ... ]
 }
 ```
 
-`_NT_DRAM_SECTION` maps the function to the `._nt_dram` section.
+If `witchboardNames` already exists, just edit or add members inside it. If it
+does not exist, add it before `"name"` or before `"parameters"` in the `WtbX`
+slot, with a comma between JSON members.
 
-Witchboard should use this only for cold/setup/UI/preset code where appropriate,
-while keeping the real-time audio path in fast code memory.
+Full naming example:
 
-API:
-https://github.com/expertsleepersltd/distingNT_API
+```json
+"witchboardNames": {
+  "channels": [
+    "Kick",
+    "Snare",
+    "Hats",
+    "Perc",
+    "Radio",
+    "Chord",
+    "Pico",
+    "Pony",
+    "Poly Res",
+    "Perc+Breaks",
+    "iPad Instr"
+  ],
+  "routes": [
+    "Percall 1",
+    "Pico MMF",
+    "Steve's MS-22",
+    "Kirbinator",
+    "Spare"
+  ],
+  "fx": [
+    "Radiant",
+    "iPad Send"
+  ],
+  "slots": [
+    ["Dry", "", "", ""],
+    ["Dry", "Pedalboard", "", ""]
+  ]
+}
+```
 
-### Experimental Witchboard DRAM-placement plan
+`channels` names the channel pages and channel prefixes. The first string is
+channel 1, the second is channel 2, and so on. If there are fewer names than
+active channels, the missing channels fall back to `Channel 1`, `Channel 2`, etc.
+Extra names are ignored.
 
-The experimental ARM build suggested roughly **3 KiB** of fast code could be
-recovered conservatively by moving cold functions to DRAM first.
+`routes` names Route A-E. The first string is Route A, the second is Route B,
+through Route E.
 
-Primary candidates:
+`fx` names FX Send 1 and FX Send 2.
+
+`slots` is optional. Empty strings, missing slot entries, or the default strings
+`Slot 1`, `Slot 2` and `Slot 3` mean "auto-name from the route assigned to that
+slot". A non-empty custom label overrides the route-derived display.
+
+Slot arrays are arranged as:
 
 ```text
-constructWitchboard()
-calculateRequirements()
-serialise()
-deserialise()
-parameterString()
-parameterUiPrefix()
-pluginEntry()
+[
+  [Insert 1 Dry, Insert 1 Slot 1, Insert 1 Slot 2, Insert 1 Slot 3],
+  [Insert 2 Dry, Insert 2 Slot 1, Insert 2 Slot 2, Insert 2 Slot 3]
+]
 ```
 
-`constructWitchboard()` alone is about **2 KiB** of ARM code and is the biggest
-single cold-code target.
+Usually this is enough:
 
-The real-time audio path remains in fast code memory, including `step()`,
-filter processing, sidechain processing, coefficient updates used from the
-audio path, including the filter, ducker and live delay handling.
-
-
-## Building
-
-The Makefile first looks for the stable API at `../distingNT_API` and
-`../../distingNT_API`, then falls back to `../distingNT_API-v119`.
-
-```sh
-make
+```json
+"slots": [
+  ["Dry", "", "", ""],
+  ["Dry", "", "", ""]
+]
 ```
 
-To use another API location:
+With that setup, the Disting displays the assigned route name. For example, if
+`Insert 1 Slot 1` points to Route B and Route B is named `Pico MMF`, selecting
+Slot 1 displays `Pico MMF`.
 
-```sh
-make NT_API_PATH=/path/to/distingNT_API
+Use a real slot name only when you want to override the assignment-derived label:
+
+```json
+"slots": [
+  ["Dry", "", "Pedalboard", ""],
+  ["Dry", "", "", ""]
+]
 ```
 
-For the full validation/package path:
+That makes Insert 1 Slot 2 display `Pedalboard` no matter which route is assigned
+to that slot.
 
-```sh
-make package NT_API_PATH=/path/to/distingNT_API
+Actual baseline example from
+[presets/WitchboardX.json](presets/WitchboardX.json):
+
+```json
+"witchboardNames": {
+  "channels": [
+    "Kick",
+    "Snare",
+    "Hats",
+    "Perc",
+    "Radio",
+    "Chord",
+    "Pico",
+    "Pony",
+    "Poly Res",
+    "Perc+Breaks",
+    "iPad Instr"
+  ],
+  "routes": [
+    "Percall 1",
+    "Pico MMF",
+    "Steve's MS-22",
+    "Kirbinator",
+    "Unused"
+  ],
+  "fx": [
+    "Radiant",
+    "Main FX 2"
+  ],
+  "slots": [
+    ["Dry", "Slot 1", "Slot 2", "Slot 3"],
+    ["Dry", "Slot 1", "Slot 2", "Slot 3"]
+  ]
+}
 ```
 
-The project includes:
+In the current plugin, the default slot strings shown above still mean
+"auto-name from the assigned route".
 
-- focused C++ host tests
-- ARM object build
-- object inspection
-- release packaging
+Practical JSON rules:
 
-
-## Developer Notes: disting NT Memory
-
-Useful memory figures from Expert Sleepers:
-
-```text
-ITC   64 kB
-DTC   24 kB
-DRAM  512 kB
-```
-
-These are implementation details rather than guaranteed API limits.
-
-Plug-in object sections map approximately as follows:
-
-```text
-.text                 -> ITC
-.data / .data.rel.ro  -> DTC
-.rodata               -> DRAM
-```
-
-Per-instance memory requested through `calculateRequirements()` comes from the
-larger global algorithm-memory pool rather than the 24 kB static DTC pool.
-
-`NT_globals.workBuffer` lives in DTC and can be used for temporary scratch data
-inside `step()`.
-
-Built-in disting NT algorithms run mostly from flash/XIP, with selected hot
-functions placed in ITC.
-
-When diagnosing a `Not enough memory` error, inspect both:
-
-- plug-in object section sizes
-- per-instance memory requested by `calculateRequirements()`
-
-Current parameter budget: **69 globals + 15 per channel**. At 11 channels this is **234 / 241**, leaving 7 spare parameters. Twelve channels would require 249 and therefore exceed the NT parameter limit by 8.
-
-The two stereo delay rings reserve **84,496 bytes** of per-instance DRAM (10 ms
-Main and 100 ms Bypass at up to 96 kHz, each with one extra frame). Channel pages
-and routing state also live in DRAM. Delay memory does not scale with channel
-count and is never allocated in the audio callback or on the stack.
-
-## Repository Layout
-
-```text
-README.md                  User documentation
-CHANGELOG.md               Development and release history
-plugins/Witchboard/        Single-file C++ implementation
-scripts/                   Inspection, packaging and preset migration
-tests/                    Host routing, gain, ducker and migration tests
-assets/                    README images
-docs/handoffs/             Ordered implementation handoff and memory findings
-.github/workflows/         Build and release automation
-Makefile                   Build, test, inspect and package entry points
-```
-
-Historical implementation handoffs and validation notes are kept under `docs/` for development reference. The README describes the current user-facing behaviour.
-
-`build/`, `release/` and compiled `.o` files are local generated artifacts and
-are excluded from Git. Run `make verify` to check the source, or `make package`
-to produce `release/WitchboardX.o` and `release/WitchboardX.zip`.
+- Keep double quotes around every name.
+- Put commas between items, but not after the final item in an array/object.
+- Use plain ASCII apostrophes if you can, for example `Steve's MS-22`.
+- Keep labels short. Witchboard stores each channel/route/FX name in a 24-byte
+  field, and channel prefixes are shortened further for the NT prefix display.

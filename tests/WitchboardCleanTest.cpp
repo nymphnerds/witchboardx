@@ -248,18 +248,20 @@ int main()
 	assert(parameterUiPrefix(maxAlgorithm,
 		channelBase(9) + kChannelInsert2, prefix) == 3);
 	assert(strcmp(prefix, "10:") == 0);
+	copyText(witchboard->channelNames[0], kHardwareNameLength, "Kick");
+	copyText(witchboard->channelNames[1], kHardwareNameLength, "Long Percussion Name");
+	assert(strcmp(algorithm->parameterPages->pages[5].name, "Kick") == 0);
+	assert(parameterUiPrefix(algorithm, channelBase(0), prefix) == 5);
+	assert(strcmp(prefix, "Kick:") == 0);
+	assert(parameterUiPrefix(algorithm, channelBase(1), prefix) == 15);
+	assert(strcmp(prefix, "Long Percussio:") == 0);
 	assert(algorithm->parameters[channelBase(0) + kChannelInsert1].unit
-		== kNT_unitEnum);
+		== kNT_unitHasStrings);
 	assert(algorithm->parameters[channelBase(0) + kChannelInsert1Slot1].unit
 		== kNT_unitHasStrings);
 	assert(algorithm->parameters[channelBase(0) + kChannelInsert1].max == 4);
 	assert(algorithm->parameters[channelBase(0) + kChannelInsert2].max == 4);
-	assert(algorithm->parameters[channelBase(0) + kChannelInsert1].enumStrings
-		== insertStateStrings);
-	assert(strcmp(algorithm->parameters[channelBase(0) + kChannelInsert1].enumStrings[0],
-		"Dry") == 0);
-	assert(strcmp(algorithm->parameters[channelBase(0) + kChannelInsert1].enumStrings[4],
-		"Slot 3") == 0);
+	assert(algorithm->parameters[channelBase(0) + kChannelInsert1].enumStrings == NULL);
 	assert(algorithm->parameters[channelBase(0) + kChannelInsert1Slot1].enumStrings == NULL);
 
 	char label[kNT_parameterStringSize] = {};
@@ -320,14 +322,28 @@ int main()
 	values[channelBase(0) + kChannelInsert1Slot2] = 1;
 	algorithm->v = values.data();
 	algorithm->vIncludingCommon = values.data();
-	assert(parameterString(algorithm, channelBase(0) + kChannelInsert1, 2, label) == 6);
-	assert(strcmp(label, "Slot 2") == 0);
+	assert(parameterString(algorithm, channelBase(0) + kChannelInsert1, 2, label) == 9);
+	assert(strcmp(label, "Stereo FX") == 0);
 	copyText(witchboard->slotNames[0][2], kSlotNameLength, "Filter");
 	copyText(witchboard->slotNames[1][3], kSlotNameLength, "Scatter");
 	assert(parameterString(algorithm, channelBase(0) + kChannelInsert1, 2, label) == 6);
 	assert(strcmp(label, "Filter") == 0);
 	assert(parameterString(algorithm, channelBase(0) + kChannelInsert2, 4, label) == 7);
 	assert(strcmp(label, "Scatter") == 0);
+
+	JsonTape namesTape;
+	{ _NT_jsonStream stream(&namesTape); stream.openObject(); serialise(algorithm, stream); stream.closeObject(); }
+	_NT_algorithmMemoryPtrs restoredMemory = allocateMemory(requirements);
+	_NT_algorithm* restoredAlgorithm = constructWitchboard(restoredMemory, requirements, specs);
+	WitchboardAlgorithm* restoredWitchboard =
+		static_cast<WitchboardAlgorithm*>(restoredAlgorithm);
+	{ _NT_jsonParse parse(&namesTape, 0); assert(deserialise(restoredAlgorithm, parse)); }
+	assert(strcmp(restoredWitchboard->channelNames[0], "Kick") == 0);
+	assert(strcmp(restoredAlgorithm->parameterPages->pages[5].name, "Kick") == 0);
+	assert(strcmp(restoredWitchboard->channelNames[1], "Long Percussion Name") == 0);
+	assert(strcmp(restoredWitchboard->slotNames[0][2], "Filter") == 0);
+	assert(strcmp(restoredWitchboard->slotNames[1][1], "") == 0);
+	freeMemory(restoredMemory);
 
 	for (int channel = 0; channel < 4; ++channel)
 	{
