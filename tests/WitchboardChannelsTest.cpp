@@ -2,15 +2,15 @@
 #include "WitchboardCleanTest.cpp"
 #undef main
 
-struct ElevenChannels
+struct TenChannels
 {
 	_NT_algorithmRequirements requirements = {};
 	_NT_algorithmMemoryPtrs memory;
 	WitchboardAlgorithm* algorithm;
 	std::vector<int16_t> values;
-	ElevenChannels()
+	TenChannels()
 	{
-		const int32_t specs[] = {11};
+		const int32_t specs[] = {10};
 		calculateRequirements(requirements, specs);
 		memory = allocateMemory(requirements);
 		algorithm = static_cast<WitchboardAlgorithm*>(constructWitchboard(memory, requirements, specs));
@@ -20,19 +20,19 @@ struct ElevenChannels
 		algorithm->v = values.data();
 		algorithm->vIncludingCommon = values.data();
 	}
-	~ElevenChannels() { freeMemory(memory); }
+	~TenChannels() { freeMemory(memory); }
 };
 
 void testPagesAndDefaults()
 {
-	ElevenChannels f;
-	assert(specifications[0].max == 11 && specifications[0].def == 11);
-	assert(f.requirements.numParameters == 234);
-	assert(f.algorithm->parameterPages->numPages == 16);
-	assert(kParamBypassOffset == 68); // Existing MIDI/CV/preset identity.
-	assert(kNumGlobalParams == 69 && kNumChannelParams == 15);
-	bool seen[234] = {};
-	for (int channel = 0; channel < 11; ++channel)
+	TenChannels f;
+	assert(specifications[0].max == 10 && specifications[0].def == 10);
+	assert(f.requirements.numParameters == 237);
+	assert(f.algorithm->parameterPages->numPages == 15);
+	assert(kParamBypassOffset == 86);
+	assert(kNumGlobalParams == 87 && kNumChannelParams == 15);
+	bool seen[237] = {};
+	for (int channel = 0; channel < 10; ++channel)
 	{
 		const auto& page = f.algorithm->parameterPages->pages[5+channel];
 		char name[20], prefix[kNT_parameterUiPrefixSize];
@@ -42,7 +42,7 @@ void testPagesAndDefaults()
 		for (int field = 0; field < 15; ++field)
 		{
 			int p = page.params[field];
-			assert(p == 69 + channel*15 + field && p < 234);
+			assert(p == 87 + channel*15 + field && p < 237);
 			assert(!seen[p]); seen[p] = true;
 			parameterUiPrefix(f.algorithm, p, prefix);
 			snprintf(name, sizeof(name), "%d:", channel+1);
@@ -50,13 +50,13 @@ void testPagesAndDefaults()
 		}
 	}
 	const auto& outputs = f.algorithm->parameterPages->pages[2];
-	const int expectedOutputs[] = {31,32,33,34,68};
+	const int expectedOutputs[] = {49,50,51,52,86};
 	assert(strcmp(outputs.name, "Final Outputs") == 0 && outputs.numParams == 5);
 	for (int i = 0; i < 5; ++i) assert(outputs.params[i] == expectedOutputs[i]);
 	const auto& master = f.algorithm->parameterPages->pages[4];
 	assert(master.numParams == 18);
-	for (int i = 0; i < 7; ++i) assert(master.params[i] == 50+i);
-	for (int i = 0; i < master.numParams; ++i) assert(master.params[i] != 68);
+	for (int i = 0; i < 7; ++i) assert(master.params[i] == 68+i);
+	for (int i = 0; i < master.numParams; ++i) assert(master.params[i] != 86);
 	assert(f.values[kParamSidechainMode] == 0 && f.values[kParamSidechainKeyInput] == 0);
 	assert(f.values[kParamSidechainDepth] == 69);
 	assert(f.values[kParamSidechainLookahead] == 60);
@@ -67,12 +67,12 @@ void testPagesAndDefaults()
 	assert(f.values[kParamMasterFilterHpCutoff] == 70);
 	assert(f.values[kParamMasterFilterEnable] == 0 && f.values[kParamMasterFilterSweep] == 0);
 	assert(f.values[kParamMasterGain] == 0);
-	// The added channel only grows existing page/runtime storage, not delay rings.
-	const int32_t tenSpecs[] = {10};
-	_NT_algorithmRequirements ten = {};
-	calculateRequirements(ten, tenSpecs);
-	assert(f.requirements.sram == ten.sram);
-	assert(f.requirements.dram > ten.dram && f.requirements.dram - ten.dram < 256);
+	// The final channel only grows existing page/runtime storage, not delay rings.
+	const int32_t nineSpecs[] = {9};
+	_NT_algorithmRequirements nine = {};
+	calculateRequirements(nine, nineSpecs);
+	assert(f.requirements.sram == nine.sram);
+	assert(f.requirements.dram > nine.dram && f.requirements.dram - nine.dram < 256);
 	assert(f.requirements.dtc == 0 && f.requirements.itc == 0);
 	const uintptr_t begin = reinterpret_cast<uintptr_t>(f.memory.dram);
 	const uintptr_t end = begin + f.requirements.dram;
@@ -80,14 +80,14 @@ void testPagesAndDefaults()
 	assert(reinterpret_cast<uintptr_t>(f.algorithm->bypassDelay.data + 2*kBypassDelayCapacity) <= end);
 }
 
-void testChannelElevenRouting()
+void testChannelTenRouting()
 {
 	// Main, Bypass, Insert 1, Insert 2, FX Send 1, FX Send 2.
 	for (int path = 0; path < 6; ++path)
 	{
-		ElevenChannels f;
+		TenChannels f;
 		auto& v = f.values;
-		const int first = channelBase(0), last = channelBase(10);
+		const int first = channelBase(0), last = channelBase(9);
 		v[kParamFadeMs] = 0;
 		v[first+kChannelInputL] = 3; v[first+kChannelInputR] = 4;
 		v[last+kChannelInputL] = 1; v[last+kChannelInputR] = 2;
@@ -104,7 +104,7 @@ void testChannelElevenRouting()
 		if (path == 3) {v[last+kChannelInsert2] = 1; v[last+kChannelInsert2Slot1] = 0;}
 		if (path == 4) v[last+kChannelFx1Mix] = 100;
 		if (path == 5) v[last+kChannelFx2Mix] = 100;
-		// Host-style notifications affect channel 11 only.
+		// Host-style notifications affect channel 10 only.
 		for (int p = last; p < last+15; ++p) parameterChanged(f.algorithm, p);
 		std::vector<float> buses(kNT_lastBus*4, 0);
 		fillBus(buses,1,0.25f); fillBus(buses,2,-0.5f);
@@ -126,7 +126,7 @@ void testChannelElevenRouting()
 		// Parameter values are serialized by NT, custom metadata by this plugin.
 		JsonTape tape;
 		{_NT_jsonStream stream(&tape); stream.openObject(); serialise(f.algorithm,stream); stream.closeObject();}
-		ElevenChannels loaded;
+		TenChannels loaded;
 		loaded.values = v;
 		for (unsigned p = 0; p < v.size(); ++p) parameterChanged(loaded.algorithm,p);
 		{_NT_jsonParse parse(&tape,0); assert(deserialise(loaded.algorithm,parse));}
@@ -140,6 +140,6 @@ void testChannelElevenRouting()
 
 int main()
 {
-	testPagesAndDefaults(); testChannelElevenRouting();
-	printf("PASS: 11 channels, 234 identities, output-page placement, locked defaults, channel-11 stereo routes and preset restoration at %.0f Hz\n",double(NT_globals.sampleRate));
+	testPagesAndDefaults(); testChannelTenRouting();
+	printf("PASS: 10 channels, 237 identities, output-page placement, locked defaults, channel-10 stereo routes and preset restoration at %.0f Hz\n",double(NT_globals.sampleRate));
 }

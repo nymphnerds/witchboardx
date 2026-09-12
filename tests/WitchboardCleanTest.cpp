@@ -161,7 +161,7 @@ int main()
 	const int32_t oneChannelSpecs[] = { 1 };
 	const int32_t specs[] = { 4 };
 	const int32_t eightChannelSpecs[] = { 8 };
-	const int32_t maxChannelSpecs[] = { 11 };
+	const int32_t maxChannelSpecs[] = { 10 };
 	_NT_algorithmRequirements oneChannelRequirements = {};
 	_NT_algorithmRequirements requirements = {};
 	_NT_algorithmRequirements eightChannelRequirements = {};
@@ -170,15 +170,15 @@ int main()
 	calculateRequirements(requirements, specs);
 	calculateRequirements(eightChannelRequirements, eightChannelSpecs);
 	calculateRequirements(maxChannelRequirements, maxChannelSpecs);
-	assert(requirements.numParameters == 129);
-	assert(maxChannelRequirements.numParameters == 234);
-	assert(specifications[0].min == 1 && specifications[0].max == 11);
+	assert(requirements.numParameters == 147);
+	assert(maxChannelRequirements.numParameters == 237);
+	assert(specifications[0].min == 1 && specifications[0].max == 10);
 	for (int channels = 1; channels <= kMaxChannels; ++channels)
 	{
 		const int32_t channelSpecs[] = { channels };
 		_NT_algorithmRequirements channelRequirements = {};
 		calculateRequirements(channelRequirements, channelSpecs);
-		assert(channelRequirements.numParameters == static_cast<uint32_t>(69 + channels * 15));
+		assert(channelRequirements.numParameters == static_cast<uint32_t>(87 + channels * 15));
 		_NT_algorithmMemoryPtrs pageMemory = allocateMemory(channelRequirements);
 		_NT_algorithm* pageAlgorithm = constructWitchboard(pageMemory,channelRequirements,channelSpecs);
 		assert(pageAlgorithm->parameterPages->numPages == static_cast<uint32_t>(5+channels));
@@ -187,7 +187,7 @@ int main()
 		for (int i = 0; i < 18; ++i) assert(masterPage.params[i] == masterPageParams[i]);
 		freeMemory(pageMemory);
 	}
-	const int32_t unsupportedSpecs[] = { 12 };
+	const int32_t unsupportedSpecs[] = { 11 };
 	_NT_algorithmRequirements clampedRequirements = {};
 	calculateRequirements(clampedRequirements, unsupportedSpecs);
 	assert(clampedRequirements.numParameters == maxChannelRequirements.numParameters);
@@ -209,7 +209,7 @@ int main()
 	_NT_algorithm* maxAlgorithm = constructWitchboard(
 		maxMemory, maxChannelRequirements, maxChannelSpecs);
 	assert(algorithm->parameterPages->numPages == 9);
-	assert(maxAlgorithm->parameterPages->numPages == 16);
+	assert(maxAlgorithm->parameterPages->numPages == 5 + kMaxChannels);
 
 	std::vector<int16_t> values(requirements.numParameters);
 	for (uint32_t i = 0; i < requirements.numParameters; ++i)
@@ -267,8 +267,8 @@ int main()
 	char label[kNT_parameterStringSize] = {};
 	assert(parameterString(algorithm, channelBase(0) + kChannelInsert1, 0, label) == 3);
 	assert(strcmp(label, "Dry") == 0);
-	assert(parameterString(algorithm, channelBase(0) + kChannelInsert1Slot1, 4, label) == 7);
-	assert(strcmp(label, "Route E") == 0);
+	assert(parameterString(algorithm, channelBase(0) + kChannelInsert1Slot1, 7, label) == 7);
+	assert(strcmp(label, "Route H") == 0);
 
 	copyText(witchboard->routeNames[0], kHardwareNameLength, "Mono Filter");
 	copyText(witchboard->routeNames[1], kHardwareNameLength, "Stereo FX");
@@ -386,9 +386,9 @@ int main()
 	assert(witchboard->runtime[3].insertState[0] == 0);
 	assert(witchboard->runtime[3].insertState[1] == 0);
 
-	values[channelBase(1) + kChannelInsert2Slot2] = 4;
+	values[channelBase(1) + kChannelInsert2Slot2] = 7;
 	stepOnce(algorithm, values);
-	assert(selectedRoute(witchboard, 1, 1, 2) == 4);
+	assert(selectedRoute(witchboard, 1, 1, 2) == 7);
 	assert(selectedRoute(witchboard, 1, 1, 0) == -1);
 
 	values[channelBase(3) + kChannelInsert1] = 3;
@@ -598,7 +598,7 @@ int main()
 		assertClose(routingWitchboard->runtime[0].gain.value, 1.0f);
 	}
 
-	printf("PASS: Witchboard v1.37 has direct routes, stable rapid switching, triggered gain shaping, master SVF filter, master insert, and repeat protection (SRAM %u/%u/%u/%u, DRAM %u/%u/%u/%u host bytes for 1/4/8/11 channels).\n",
+	printf("PASS: Witchboard personal 10-channel/8-route build has direct routes, stable rapid switching, triggered gain shaping, master SVF filter, master insert, and repeat protection (SRAM %u/%u/%u/%u, DRAM %u/%u/%u/%u host bytes for 1/4/8/10 channels).\n",
 		oneChannelRequirements.sram, requirements.sram,
 		eightChannelRequirements.sram, maxChannelRequirements.sram,
 		oneChannelRequirements.dram, requirements.dram,

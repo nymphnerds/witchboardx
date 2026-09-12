@@ -19,8 +19,8 @@
 namespace
 {
 
-constexpr int kMaxChannels = 11;
-constexpr int kNumRoutes = 5;
+constexpr int kMaxChannels = 10;
+constexpr int kNumRoutes = 8;
 constexpr int kNumInserts = 2;
 constexpr int kNumRouteParams = 6;
 constexpr int kNumInsertStates = 4;
@@ -135,13 +135,13 @@ constexpr int kFinalOutputParams = kParamFx1L - kParamMainL + 1; // Bypass Offse
 constexpr int kFxSetupParams = kParamSidechainMode - kParamFx1L;
 constexpr int kMasterPageParams = kNumGlobalParams - kParamSidechainMode - 1;
 constexpr int kMaxParams = kNumGlobalParams + kMaxChannels * kNumChannelParams;
-static_assert(kMaxParams == 234, "11-channel parameter budget changed");
+static_assert(kMaxParams == 237, "10-channel/8-route parameter budget changed");
 static_assert(kMaxParams <= 241, "disting NT supports at most 241 parameters per algorithm");
-static_assert(kNumGlobalParams == 69, "global parameter count changed");
-static_assert(kParamMainL == 31, "final output page indices changed");
-static_assert(kParamFx1L == 35, "FX setup page indices changed");
-static_assert(kParamRepeatProtection == 49, "repeat protection index changed");
-static_assert(kParamSidechainMode == 50, "master page indices changed");
+static_assert(kNumGlobalParams == 87, "global parameter count changed");
+static_assert(kParamMainL == 49, "final output page indices changed");
+static_assert(kParamFx1L == 53, "FX setup page indices changed");
+static_assert(kParamRepeatProtection == 67, "repeat protection index changed");
+static_assert(kParamSidechainMode == 68, "master page indices changed");
 static_assert(kNumChannelParams == 15, "channel parameter count changed");
 static_assert(kChannelGain == 3, "Gain offset changed");
 static_assert(kChannelInsert1 == 4, "Insert 1 offset changed");
@@ -170,7 +170,7 @@ static char const* const widthStrings[] = {
 static char const* const channelPageNames[kMaxChannels] = {
 	"Channel 1", "Channel 2", "Channel 3", "Channel 4",
 	"Channel 5", "Channel 6", "Channel 7", "Channel 8",
-	"Channel 9", "Channel 10", "Channel 11",
+	"Channel 9", "Channel 10",
 };
 
 static char const* const channelSuffixes[kNumChannelParams] = {
@@ -192,7 +192,8 @@ static char const* const channelSuffixes[kNumChannelParams] = {
 };
 
 static char const* const defaultRouteNames[kNumRoutes] = {
-	"Route A", "Route B", "Route C", "Route D", "Route E",
+	"Route A", "Route B", "Route C", "Route D",
+	"Route E", "Route F", "Route G", "Route H",
 };
 
 static char const* const defaultFxNames[2] = {
@@ -228,6 +229,18 @@ static char const* const defaultRouteParameterNames[kNumRoutes][kNumRouteParams]
 	{
 		"Route E output L", "Route E output R", "Route E return L",
 		"Route E return R", "Route E send width", "Route E return width",
+	},
+	{
+		"Route F output L", "Route F output R", "Route F return L",
+		"Route F return R", "Route F send width", "Route F return width",
+	},
+	{
+		"Route G output L", "Route G output R", "Route G return L",
+		"Route G return R", "Route G send width", "Route G return width",
+	},
+	{
+		"Route H output L", "Route H output R", "Route H return L",
+		"Route H return R", "Route H send width", "Route H return width",
 	},
 };
 
@@ -269,6 +282,15 @@ static const uint8_t routeSetupPageParams[kRouteSetupParams] = {
 	routeParam(4, kRouteOutputL), routeParam(4, kRouteOutputR),
 	routeParam(4, kRouteReturnL), routeParam(4, kRouteReturnR),
 	routeParam(4, kRouteSendWidth), routeParam(4, kRouteReturnWidth),
+	routeParam(5, kRouteOutputL), routeParam(5, kRouteOutputR),
+	routeParam(5, kRouteReturnL), routeParam(5, kRouteReturnR),
+	routeParam(5, kRouteSendWidth), routeParam(5, kRouteReturnWidth),
+	routeParam(6, kRouteOutputL), routeParam(6, kRouteOutputR),
+	routeParam(6, kRouteReturnL), routeParam(6, kRouteReturnR),
+	routeParam(6, kRouteSendWidth), routeParam(6, kRouteReturnWidth),
+	routeParam(7, kRouteOutputL), routeParam(7, kRouteOutputR),
+	routeParam(7, kRouteReturnL), routeParam(7, kRouteReturnR),
+	routeParam(7, kRouteSendWidth), routeParam(7, kRouteReturnWidth),
 };
 
 static const uint8_t finalOutputPageParams[kFinalOutputParams] = {

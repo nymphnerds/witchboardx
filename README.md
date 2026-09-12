@@ -117,11 +117,11 @@ See [Cycling ’74 curve~](https://docs.cycling74.com/reference/curve~/) and
 
 ## Features
 
-- Up to **11 stereo source channels**
+- Up to **10 stereo source channels** in this personal 8-route build
 - Channel gain up to **+6 dB**, with 0 dB defaults
 - Final **Master Gain**, from -12 to +6 dB
 - Two serial insert stages per channel
-- Five assignable insert routes
+- Eight assignable insert routes
 - Two shared stereo FX sends
 - Main / Bypass output paths
 - Trigger-driven Main ducking with 0–10 ms lookahead
@@ -209,7 +209,7 @@ Unused channels can be disabled or left with no Input L bus assigned.
 
 ## Insert Routes
 
-Witchboard has five assignable insert routes:
+Witchboard has eight assignable insert routes:
 
 ```text
 Route A
@@ -217,6 +217,9 @@ Route B
 Route C
 Route D
 Route E
+Route F
+Route G
+Route H
 ```
 
 Each route has a send, return and mono/stereo width configuration.
@@ -235,7 +238,7 @@ The extra top value keeps common four-position MIDI controls such as
 `0 / 42 / 85 / 127` landing cleanly on Dry / Slot 1 / Slot 2 / Slot 3 when the
 NT mapping range is set to `0..4`.
 
-Each slot can point independently to Route A-E. In the parameter display, the
+Each slot can point independently to Route A-H. In the parameter display, the
 insert selector asks Witchboard for a custom value string and uses the assigned
 route name for the selected slot. For example, if `Insert 1 Slot 1` points to
 Route B and Route B is named `Pico MMF`, selecting `Slot 1` displays `Pico MMF`
@@ -540,10 +543,19 @@ Minimal shape inside the `WtbX` slot:
 ```json
 {
   "guid": "WtbX",
-  "specs": [11, 0, 0],
+  "specs": [10, 0, 0],
   "witchboardNames": {
     "channels": ["Kick", "Snare"],
-    "routes": ["Percall 1", "Pico MMF", "Steve's MS-22", "Kirbinator", "Unused"],
+    "routes": [
+      "Percall 1",
+      "Pico MMF",
+      "Steve's MS-22",
+      "Kirbinator",
+      "Unused",
+      "Route F",
+      "Route G",
+      "Route H"
+    ],
     "fx": ["Radiant", "Main FX 2"]
   },
   "name": "MAIN WITCHBOARD        ",
@@ -569,15 +581,17 @@ Full naming example:
     "Pico",
     "Pony",
     "Poly Res",
-    "Perc+Breaks",
-    "iPad Instr"
+    "Perc+Breaks"
   ],
   "routes": [
     "Percall 1",
     "Pico MMF",
     "Steve's MS-22",
     "Kirbinator",
-    "Unused"
+    "Unused",
+    "Route F",
+    "Route G",
+    "Route H"
   ],
   "fx": [
     "Radiant",
@@ -595,8 +609,8 @@ channel 1, the second is channel 2, and so on. If there are fewer names than
 active channels, the missing channels fall back to `Channel 1`, `Channel 2`, etc.
 Extra names are ignored.
 
-`routes` names Route A-E. The first string is Route A, the second is Route B,
-through Route E.
+`routes` names Route A-H. The first string is Route A, the second is Route B,
+through Route H.
 
 `fx` names FX Send 1 and FX Send 2.
 
@@ -653,15 +667,17 @@ Actual baseline example from
     "Pico",
     "Pony",
     "Poly Res",
-    "Perc+Breaks",
-    "iPad Instr"
+    "Perc+Breaks"
   ],
   "routes": [
     "Percall 1",
     "Pico MMF",
     "Steve's MS-22",
     "Kirbinator",
-    "Unused"
+    "Unused",
+    "Route F",
+    "Route G",
+    "Route H"
   ],
   "fx": [
     "Radiant",
