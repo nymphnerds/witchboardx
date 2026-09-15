@@ -11,8 +11,8 @@
   use.
 - Support optional dedicated MIDI faders for each FX send, as well as a shared
   selected-send fader with pickup.
-- Add **Latency Compensation** for a channel insert, such as an iPad or PC
-  effect. Select the channel with the late return and set
+- Add Latency Compensation per channel for a channel insert, such as an
+  iPad or PC effect. Select the channel with the late return and set
   its Offset to the measured delay; for example, Channel 2 at −12 ms makes
   Witchboard delay the other channels by 12 ms to meet it at the mixer output.
   This aligns the paths but does not remove the insert's round-trip latency:
