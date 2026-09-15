@@ -110,9 +110,11 @@ void assertCrossfadeRouting(float fx1Mix, float fx2Mix,
 	const float* returnRight[kNumRoutes] = {};
 	bool returnStereo[kNumRoutes] = {};
 
+	const CrossfadeGains fxGains[kNumFx] = {shapedCrossfade(fx1Mix), shapedCrossfade(fx2Mix), shapedCrossfade(0), shapedCrossfade(0)};
+	float left = 0, right = 0;
 	processPath(outputs, returnLeft, returnRight, returnStereo,
-		0, 1.0f, 1.0f, false, -1, -1, true, 0, 1.0f, 1.0f,
-		shapedCrossfade(fx1Mix), shapedCrossfade(fx2Mix));
+		0, 1.0f, 1.0f, false, -1, -1, true, 1.0f, 1.0f, left, right);
+	mixChannelSignal(outputs, 0, 0, left, right, fxGains);
 	assertClose(dry[0], expectedDry);
 	assertClose(wet1[0], expectedFx1);
 	assertClose(wet2[0], expectedFx2);
@@ -123,7 +125,7 @@ int main()
 	assert(witchboardFactory.guid == NT_MULTICHAR('W', 't', 'b', 'X'));
 	assert(strcmp(witchboardFactory.name, "WitchboardX") == 0);
 	assert(witchboardFactory.parameterChanged == parameterChanged);
-	assert(witchboardFactory.midiMessage == NULL);
+	assert(witchboardFactory.midiMessage == midiMessage);
 	assert(witchboardFactory.midiRealtime == NULL);
 	assert(witchboardFactory.midiSysEx == NULL);
 	assert(witchboardFactory.parameterUiPrefix == parameterUiPrefix);
@@ -170,18 +172,18 @@ int main()
 	calculateRequirements(requirements, specs);
 	calculateRequirements(eightChannelRequirements, eightChannelSpecs);
 	calculateRequirements(maxChannelRequirements, maxChannelSpecs);
-	assert(requirements.numParameters == 147);
-	assert(maxChannelRequirements.numParameters == 237);
+	assert(requirements.numParameters == 151);
+	assert(maxChannelRequirements.numParameters == 241);
 	assert(specifications[0].min == 1 && specifications[0].max == 10);
 	for (int channels = 1; channels <= kMaxChannels; ++channels)
 	{
 		const int32_t channelSpecs[] = { channels };
 		_NT_algorithmRequirements channelRequirements = {};
 		calculateRequirements(channelRequirements, channelSpecs);
-		assert(channelRequirements.numParameters == static_cast<uint32_t>(87 + channels * 15));
+		assert(channelRequirements.numParameters == static_cast<uint32_t>(91 + channels * 15));
 		_NT_algorithmMemoryPtrs pageMemory = allocateMemory(channelRequirements);
 		_NT_algorithm* pageAlgorithm = constructWitchboard(pageMemory,channelRequirements,channelSpecs);
-		assert(pageAlgorithm->parameterPages->numPages == static_cast<uint32_t>(5+channels));
+		assert(pageAlgorithm->parameterPages->numPages == static_cast<uint32_t>(6+channels));
 		const _NT_parameterPage& masterPage = pageAlgorithm->parameterPages->pages[4];
 		assert(strcmp(masterPage.name,"Sidechain/Master") == 0 && masterPage.numParams == 18);
 		for (int i = 0; i < 18; ++i) assert(masterPage.params[i] == masterPageParams[i]);
@@ -208,8 +210,8 @@ int main()
 	_NT_algorithmMemoryPtrs maxMemory = allocateMemory(maxChannelRequirements);
 	_NT_algorithm* maxAlgorithm = constructWitchboard(
 		maxMemory, maxChannelRequirements, maxChannelSpecs);
-	assert(algorithm->parameterPages->numPages == 9);
-	assert(maxAlgorithm->parameterPages->numPages == 5 + kMaxChannels);
+	assert(algorithm->parameterPages->numPages == 10);
+	assert(maxAlgorithm->parameterPages->numPages == 6 + kMaxChannels);
 
 	std::vector<int16_t> values(requirements.numParameters);
 	for (uint32_t i = 0; i < requirements.numParameters; ++i)
@@ -223,8 +225,8 @@ int main()
 		"Insert 1 slot 2") == 0);
 	assert(strcmp(algorithm->parameters[channelBase(0) + kChannelInsert1Slot3].name,
 		"Insert 1 slot 3") == 0);
-	assert(strcmp(algorithm->parameters[channelBase(0) + kChannelFx1Mix].name,
-		"FX Send 1 mix") == 0);
+	assert(strcmp(algorithm->parameters[channelBase(0) + kChannelSendAmount].name,
+		"Send amount") == 0);
 	assert(strcmp(algorithm->parameters[channelBase(0) + kChannelInsert2].name,
 		"Insert 2") == 0);
 	assert(strcmp(algorithm->parameters[channelBase(0) + kChannelInsert2Slot1].name,
@@ -235,8 +237,8 @@ int main()
 		"Insert 2 slot 3") == 0);
 	assert(strcmp(algorithm->parameters[channelBase(1) + kChannelInsert1].name,
 		"Insert 1") == 0);
-	assert(strcmp(algorithm->parameters[channelBase(1) + kChannelFx1Mix].name,
-		"FX Send 1 mix") == 0);
+	assert(strcmp(algorithm->parameters[channelBase(1) + kChannelSendAmount].name,
+		"Send amount") == 0);
 	assert(strcmp(algorithm->parameters[channelBase(1) + kChannelInsert2].name,
 		"Insert 2") == 0);
 	char prefix[kNT_parameterUiPrefixSize] = {};
@@ -268,7 +270,7 @@ int main()
 	assert(parameterString(algorithm, channelBase(0) + kChannelInsert1, 0, label) == 3);
 	assert(strcmp(label, "Dry") == 0);
 	assert(parameterString(algorithm, channelBase(0) + kChannelInsert1Slot1, 7, label) == 7);
-	assert(strcmp(label, "Route H") == 0);
+	assert(strcmp(label, "Route F") == 0);
 
 	copyText(witchboard->routeNames[0], kHardwareNameLength, "Mono Filter");
 	copyText(witchboard->routeNames[1], kHardwareNameLength, "Stereo FX");
@@ -350,14 +352,20 @@ int main()
 		const _NT_parameterPage& page = algorithm->parameterPages->pages[5 + channel];
 		assert(page.numParams == kNumChannelParams);
 		for (int p = 0; p < kNumChannelParams; ++p)
-			assert(page.params[p] == channelBase(channel) + p);
+			{
+			const int order[] = {0,1,2,3,4,5,6,7,8,14,9,10,11,12,13};
+			assert(page.params[p] == channelBase(channel) + order[p]);
+		}
 	}
 	for (int channel = 0; channel < kMaxChannels; ++channel)
 	{
 		const _NT_parameterPage& page = maxAlgorithm->parameterPages->pages[5 + channel];
 		assert(page.numParams == kNumChannelParams);
 		for (int p = 0; p < kNumChannelParams; ++p)
-			assert(page.params[p] == channelBase(channel) + p);
+			{
+			const int order[] = {0,1,2,3,4,5,6,7,8,14,9,10,11,12,13};
+			assert(page.params[p] == channelBase(channel) + order[p]);
+		}
 	}
 
 	values[kParamFadeMs] = 0;
@@ -388,7 +396,7 @@ int main()
 
 	values[channelBase(1) + kChannelInsert2Slot2] = 7;
 	stepOnce(algorithm, values);
-	assert(selectedRoute(witchboard, 1, 1, 2) == 7);
+	assert(selectedRoute(witchboard, 1, 1, 2) == 5);
 	assert(selectedRoute(witchboard, 1, 1, 0) == -1);
 
 	values[channelBase(3) + kChannelInsert1] = 3;
@@ -404,12 +412,12 @@ int main()
 	stepOnce(algorithm, values);
 	assert(witchboard->runtime[3].insertState[0] == 3);
 
-	values[channelBase(1) + kChannelFx1Mix] = 100;
+	values[channelBase(1) + kChannelSendAmount] = 100;
 	stepOnce(algorithm, values);
-	assert(witchboard->runtime[0].fx1Mix.parameterValue == 0);
-	assert(witchboard->runtime[1].fx1Mix.parameterValue == 100);
-	assert(witchboard->runtime[2].fx1Mix.parameterValue == 0);
-	assert(witchboard->runtime[3].fx1Mix.parameterValue == 0);
+	assert(witchboard->runtime[0].fxMix[0].parameterValue == 0);
+	assert(witchboard->runtime[1].fxMix[0].parameterValue == 100);
+	assert(witchboard->runtime[2].fxMix[0].parameterValue == 0);
+	assert(witchboard->runtime[3].fxMix[0].parameterValue == 0);
 
 	const int32_t routingSpecs[] = { 2 };
 	_NT_algorithmRequirements routingRequirements = {};
@@ -598,7 +606,7 @@ int main()
 		assertClose(routingWitchboard->runtime[0].gain.value, 1.0f);
 	}
 
-	printf("PASS: Witchboard personal 10-channel/8-route build has direct routes, stable rapid switching, triggered gain shaping, master SVF filter, master insert, and repeat protection (SRAM %u/%u/%u/%u, DRAM %u/%u/%u/%u host bytes for 1/4/8/10 channels).\n",
+	printf("PASS: Witchboard 10-channel/6-route/4-send build has direct routes, stable rapid switching, triggered gain shaping, master SVF filter, master insert, and repeat protection (SRAM %u/%u/%u/%u, DRAM %u/%u/%u/%u host bytes for 1/4/8/10 channels).\n",
 		oneChannelRequirements.sram, requirements.sram,
 		eightChannelRequirements.sram, maxChannelRequirements.sram,
 		oneChannelRequirements.dram, requirements.dram,

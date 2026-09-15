@@ -2,6 +2,19 @@
 
 # WitchboardX
 
+## What's new in v1.0.3
+
+- Six assignable insert routes (A–F), up from five.
+- Four shared stereo FX sends and returns, up from two. Map the new **Send
+  select** parameter to a button to choose an effect, then use one **Send
+  amount** fader to set its level. Each send remembers its own level, and sends
+  you have already set keep running. You can also assign a dedicated MIDI fader
+  to each send.
+- A per-channel Offset page aligns late sources over a −30.0 to 0.0 ms range,
+  in 0.1 ms steps.
+- Up to ten channels fit alongside the expanded routing within the disting NT
+  parameter limit.
+
 > **Firmware requirement: disting NT v1.18 or later.**
 
 Witchboard is a routing mixer and serial patchbay plug-in for the Expert Sleepers
@@ -117,12 +130,13 @@ See [Cycling ’74 curve~](https://docs.cycling74.com/reference/curve~/) and
 
 ## Features
 
-- Up to **10 stereo source channels** in this personal 8-route build
+- Up to **10 stereo source channels**
 - Channel gain up to **+6 dB**, with 0 dB defaults
 - Final **Master Gain**, from -12 to +6 dB
 - Two serial insert stages per channel
-- Eight assignable insert routes
-- Two shared stereo FX sends
+- Six assignable insert routes (A–F)
+- Four shared stereo FX sends
+- Per-channel timing offsets from −30.0 to 0.0 ms
 - Main / Bypass output paths
 - Trigger-driven Main ducking with 0–10 ms lookahead
 - Bypass Offset with automatic lookahead compensation and 0–100 ms effective delay
@@ -142,8 +156,8 @@ Input L/R
   -> Gain
   -> Insert 1
   -> Insert 2
-  -> FX Send 1
-  -> FX Send 2
+  -> Per-channel timing offset
+  -> FX Sends 1–4
   -> Main or Bypass
 ```
 
@@ -194,13 +208,13 @@ Each channel has:
 - Insert 1 Slot 1
 - Insert 1 Slot 2
 - Insert 1 Slot 3
-- FX Send 1 mix
+- Send select
 - Insert 2
 - Insert 2 Slot 1
 - Insert 2 Slot 2
 - Insert 2 Slot 3
 - Output path
-- FX Send 2 mix
+- Send amount
 
 `Gain` ranges from -60 dB (mute) to +6 dB, defaulting to 0 dB.
 Existing preset gain values and MIDI mapping ranges are preserved.
@@ -209,7 +223,7 @@ Unused channels can be disabled or left with no Input L bus assigned.
 
 ## Insert Routes
 
-Witchboard has eight assignable insert routes:
+Witchboard has six assignable insert routes:
 
 ```text
 Route A
@@ -218,8 +232,6 @@ Route C
 Route D
 Route E
 Route F
-Route G
-Route H
 ```
 
 Each route has a send, return and mono/stereo width configuration.
@@ -238,7 +250,7 @@ The extra top value keeps common four-position MIDI controls such as
 `0 / 42 / 85 / 127` landing cleanly on Dry / Slot 1 / Slot 2 / Slot 3 when the
 NT mapping range is set to `0..4`.
 
-Each slot can point independently to Route A-H. In the parameter display, the
+Each slot can point independently to Route A-F. In the parameter display, the
 insert selector asks Witchboard for a custom value string and uses the assigned
 route name for the selected slot. For example, if `Insert 1 Slot 1` points to
 Route B and Route B is named `Pico MMF`, selecting `Slot 1` displays `Pico MMF`
@@ -250,14 +262,33 @@ both insert stages.
 
 ## FX Sends
 
-Two shared stereo FX paths are available:
+Four shared stereo FX paths are available:
 
 - FX Send 1
 - FX Send 2
+- FX Send 3
+- FX Send 4
 
-Each channel has an `FX Send 1 mix` and `FX Send 2 mix`.
+Each channel has a new **Send select** parameter and a **Send amount**
+parameter. Map Send select to a button/controller to choose FX1, FX2, FX3, or
+FX4. Map Send amount to one fader. The button chooses which send the fader
+controls; Witchboard remembers a separate level for every send and recalls it
+when selected. All four sends stay active at their saved levels, so you can
+balance several effects on one channel with one button and one fader.
 
-The mix control uses an overlap shape:
+For example, select FX1 and set it to 35%, then select FX3 and set it to 20%.
+That channel now feeds FX1 and FX3 at those levels simultaneously. Selecting
+FX1 again recalls 35%; moving the fader changes FX1 without altering FX3.
+**Send amount** ranges from 0–100. The selector displays the FX's preset name
+when one is set; its values are 0 = FX1, 1 = FX2, 2 = FX3, and 3 or 4 = FX4.
+
+For a four-position MIDI button/control, map Send select over 0–4. Values 0,
+42, 85, and 127 select FX1, FX2, FX3, and FX4. FX4 accepts both selector values
+3 and 4 so the top position maps reliably. If you prefer direct control, assign
+a dedicated MIDI fader to each send; you can use those alongside the
+button-and-fader workflow.
+
+The selected send's mix amount uses an overlap shape:
 
 ```text
 0%        dry 1.0, wet 0.0
@@ -265,11 +296,16 @@ The mix control uses an overlap shape:
 100%      dry 0.0, wet 1.0
 ```
 
-From 0-50%, dry stays full while wet fades in.
+From 0–50%, dry stays full while wet fades in.
 
-From 50-100%, wet stays full while dry fades out.
+From 50–100%, wet stays full while dry fades out. The dry factors for the four
+sends multiply, while each wet feed is controlled by its own saved amount.
 
 Each FX return can be assigned to Main or Bypass.
+
+Optional dedicated per-send MIDI faders and a shared fader with pickup can
+control these levels. See the
+[six-route/four-send guide](docs/six-routes-four-sends.md) for setup.
 
 ## Sidechain and latency alignment
 
@@ -358,13 +394,38 @@ contribution, then the new contribution is applied.
 Physical delay clamps to 0–100 ms. Hidden trim metadata preserves manual intent
 at either limit, including across preset save/load; a direct Bypass Offset edit
 replaces that trim. A positive-only Bypass delay cannot advance a late Bypass
-branch. Per-channel signed compensation is a future feature.
+branch; use the per-channel Offset page to align a late channel against the rest
+of the mix.
 
 Both delays crossfade old/new taps over 5 ms. Rapid requests finish the current
 fade, then fade toward the latest target, so settling can take up to 10 ms.
 Delay history stays populated at zero delay. After a live SC Off transition
 settles, Main adds no lookahead latency; manual Bypass Offset remains active.
 At SC Off and Bypass Offset zero there is no new steady-state latency.
+
+### Per-channel Offset — align a late insert return
+
+Use **Offset** when one channel returns later than the others after external
+processing—for example, when that channel passes through an iPad effect over a
+USB insert. Select the processed channel, then set its Offset negative. Witchboard
+uses that channel as the timing reference and delays the other channels to line
+up with it.
+
+For example, if the iPad insert makes Channel 2 arrive about 12 ms late, set
+Channel to 2 and Offset to −12.0 ms. Channel 2 gets no additional alignment
+delay; the other channels are delayed by 12 ms. Fine-tune the value by ear or
+with a transient test. The range is −30.0 to 0.0 ms in 0.1 ms steps, and each
+channel keeps its own setting.
+
+This compensates the timing difference inside Witchboard; it does not make the
+iPad return arrive earlier or remove its round-trip latency from the whole
+performance. With a −12.0 ms setting, the aligned mix is delayed by 12 ms. The
+most negative channel setting sets this common delay. Offset is applied after
+both channel inserts and before that channel's FX sends and Main/Bypass routing.
+
+Use this for a per-channel insert path. A **Master Insert** is after channels
+have been combined, so its round-trip delay affects the whole mix equally and
+does not need per-channel compensation.
 
 Factory sidechain values are **Depth 69%**, **Lookahead 6 ms**, **Env Length about 300 ms**, **Curve +20**, and **Smooth 4% (8 ms)**. Sidechain itself defaults to **Off**, so enabling it gives the intended musical pump without forcing ducking on every new patch.
 
@@ -503,16 +564,20 @@ Artifact: WitchboardX.o
 Copy the built object to the disting NT MicroSD plug-in directory, then rescan
 plug-ins or restart the module.
 
-The parameter layout changed. Migrate older WtSF/WtEQ/WtbX presets before loading:
+This release has a different parameter layout from earlier WitchboardX builds.
+Load the included matching preset or convert a supported preset before loading;
+do not reuse an older preset directly. The supplied conversion helper supports
+the personal eight-route/two-send layout with up to ten channels:
 
 ```sh
-python3 scripts/migrate_v134_preset.py old.json migrated.json
+python3 scripts/migrate_six_routes_four_sends.py old.json six-four.json --channels 10
+python3 scripts/migrate_channel_offsets.py six-four.json migrated.json
 ```
 
-The converter preserves channels, routes, filter, final gain, names and compatible
-mappings. It removes EQ and obsolete ducker mappings, resets the new ducker to
-its initial settings with Sidechain Off, and preserves Trigger Input and Depth.
-It writes a new file and refuses to overwrite an existing destination. Already converted presets pass through unchanged.
+The converter preserves other algorithms and stops if it finds unsupported
+routes or mappings rather than silently discarding them. It does not convert
+the earlier public-release preset layout. Back up presets before conversion;
+the helper writes a new file and refuses to overwrite an existing destination.
 
 ## JSON Naming Guide
 

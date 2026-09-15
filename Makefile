@@ -62,9 +62,29 @@ $(BUILD_DIR)/WitchboardChannelsTest-%: tests/WitchboardChannelsTest.cpp tests/Wi
 test-channels: $(CHANNEL_TESTS)
 	@set -e; for test in $(CHANNEL_TESTS); do "$$test"; done
 
-test: $(HOST_TEST) test-gain test-ducker test-channels
+SEND_TESTS := $(foreach rate,32000 44100 48000 96000,$(BUILD_DIR)/WitchboardSendsTest-$(rate))
+
+$(BUILD_DIR)/WitchboardSendsTest-%: tests/WitchboardSendsTest.cpp tests/WitchboardCleanTest.cpp tests/NtJsonTestHost.h $(SOURCE) $(API_HEADER) | check-api $(BUILD_DIR)
+	$(HOST_CXX) $(HOST_FLAGS) -DWITCHBOARD_TEST_SAMPLE_RATE=$* -I"$(INCLUDE_PATH)" "$<" -o "$@"
+
+.PHONY: test-sends
+test-sends: $(SEND_TESTS)
+	@set -e; for test in $(SEND_TESTS); do "$$test"; done
+
+OFFSET_TESTS := $(foreach rate,32000 44100 48000 96000,$(BUILD_DIR)/WitchboardOffsetsTest-$(rate))
+
+$(BUILD_DIR)/WitchboardOffsetsTest-%: tests/WitchboardOffsetsTest.cpp tests/WitchboardCleanTest.cpp tests/NtJsonTestHost.h $(SOURCE) $(API_HEADER) | check-api $(BUILD_DIR)
+	$(HOST_CXX) $(HOST_FLAGS) -DWITCHBOARD_TEST_SAMPLE_RATE=$* -I"$(INCLUDE_PATH)" "$<" -o "$@"
+
+.PHONY: test-offsets
+test-offsets: $(OFFSET_TESTS)
+	@set -e; for test in $(OFFSET_TESTS); do "$$test"; done
+
+test: $(HOST_TEST) test-gain test-ducker test-channels test-sends test-offsets
 	"$(HOST_TEST)"
 	python3 tests/test_preset_migration.py
+	python3 tests/test_four_send_migration.py
+	python3 tests/test_channel_offsets_migration.py
 
 hardware: $(OUTPUT)
 

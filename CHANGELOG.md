@@ -1,5 +1,24 @@
 # Changelog
 
+## v1.0.3
+
+- Increase the insert-route count from five to six (Routes A–F).
+- Expand the shared stereo FX system from two sends/returns to four.
+- Add the per-channel **Send select** and **Send amount** editor. Map Send
+  select to a button/controller and Send amount to one fader to choose and
+  adjust a send. Each channel remembers a separate level for every FX send;
+  selecting another send recalls its level without stopping sends already in
+  use.
+- Support optional dedicated MIDI faders for each FX send, as well as a shared
+  selected-send fader with pickup.
+- Add a per-channel Offset editor with a range of −30.0 to 0.0 ms in 0.1 ms
+  steps. Negative offsets align a late channel insert return by delaying the
+  other channels; they do not make the processed signal arrive earlier.
+- Set the maximum channel count to ten so the expanded feature set stays within
+  the disting NT's 241-parameter limit.
+- Add preset migration helpers and regression coverage for send editing, MIDI
+  control, offset timing, and save/restore behavior.
+
 ## v1.0.2 — JSON naming and release polish
 
 - Add JSON-backed WitchboardX channel names under `witchboardNames.channels`.

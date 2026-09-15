@@ -27,11 +27,11 @@ void testPagesAndDefaults()
 {
 	TenChannels f;
 	assert(specifications[0].max == 10 && specifications[0].def == 10);
-	assert(f.requirements.numParameters == 237);
-	assert(f.algorithm->parameterPages->numPages == 15);
-	assert(kParamBypassOffset == 86);
-	assert(kNumGlobalParams == 87 && kNumChannelParams == 15);
-	bool seen[237] = {};
+	assert(f.requirements.numParameters == 241);
+	assert(f.algorithm->parameterPages->numPages == 16);
+	assert(kParamBypassOffset == 88);
+	assert(kNumGlobalParams == 89 && kNumChannelParams == 15);
+	bool seen[241] = {};
 	for (int channel = 0; channel < 10; ++channel)
 	{
 		const auto& page = f.algorithm->parameterPages->pages[5+channel];
@@ -42,7 +42,8 @@ void testPagesAndDefaults()
 		for (int field = 0; field < 15; ++field)
 		{
 			int p = page.params[field];
-			assert(p == 87 + channel*15 + field && p < 237);
+			const int order[] = {0,1,2,3,4,5,6,7,8,14,9,10,11,12,13};
+			assert(p == 89 + channel*15 + order[field] && p < 239);
 			assert(!seen[p]); seen[p] = true;
 			parameterUiPrefix(f.algorithm, p, prefix);
 			snprintf(name, sizeof(name), "%d:", channel+1);
@@ -50,13 +51,13 @@ void testPagesAndDefaults()
 		}
 	}
 	const auto& outputs = f.algorithm->parameterPages->pages[2];
-	const int expectedOutputs[] = {49,50,51,52,86};
+	const int expectedOutputs[] = {37,38,39,40,88};
 	assert(strcmp(outputs.name, "Final Outputs") == 0 && outputs.numParams == 5);
 	for (int i = 0; i < 5; ++i) assert(outputs.params[i] == expectedOutputs[i]);
 	const auto& master = f.algorithm->parameterPages->pages[4];
 	assert(master.numParams == 18);
-	for (int i = 0; i < 7; ++i) assert(master.params[i] == 68+i);
-	for (int i = 0; i < master.numParams; ++i) assert(master.params[i] != 86);
+	for (int i = 0; i < 7; ++i) assert(master.params[i] == 70+i);
+	for (int i = 0; i < master.numParams; ++i) assert(master.params[i] != 88);
 	assert(f.values[kParamSidechainMode] == 0 && f.values[kParamSidechainKeyInput] == 0);
 	assert(f.values[kParamSidechainDepth] == 69);
 	assert(f.values[kParamSidechainLookahead] == 60);
@@ -67,12 +68,12 @@ void testPagesAndDefaults()
 	assert(f.values[kParamMasterFilterHpCutoff] == 70);
 	assert(f.values[kParamMasterFilterEnable] == 0 && f.values[kParamMasterFilterSweep] == 0);
 	assert(f.values[kParamMasterGain] == 0);
-	// The final channel only grows existing page/runtime storage, not delay rings.
+	// Each extra channel adds its own 30 ms stereo DRAM ring.
 	const int32_t nineSpecs[] = {9};
 	_NT_algorithmRequirements nine = {};
 	calculateRequirements(nine, nineSpecs);
 	assert(f.requirements.sram == nine.sram);
-	assert(f.requirements.dram > nine.dram && f.requirements.dram - nine.dram < 256);
+	assert(f.requirements.dram > nine.dram && f.requirements.dram - nine.dram < 25000);
 	assert(f.requirements.dtc == 0 && f.requirements.itc == 0);
 	const uintptr_t begin = reinterpret_cast<uintptr_t>(f.memory.dram);
 	const uintptr_t end = begin + f.requirements.dram;
@@ -102,8 +103,8 @@ void testChannelTenRouting()
 		if (path == 1) v[last+kChannelOutputPath] = kOutputPathBypass;
 		if (path == 2) {v[last+kChannelInsert1] = 1; v[last+kChannelInsert1Slot1] = 0;}
 		if (path == 3) {v[last+kChannelInsert2] = 1; v[last+kChannelInsert2Slot1] = 0;}
-		if (path == 4) v[last+kChannelFx1Mix] = 100;
-		if (path == 5) v[last+kChannelFx2Mix] = 100;
+		if (path == 4) { v[last+kChannelSendAmount] = 100; }
+		if (path == 5) { v[last+kChannelSendSelect] = 1; v[last+kChannelSendAmount] = 100; }
 		// Host-style notifications affect channel 10 only.
 		for (int p = last; p < last+15; ++p) parameterChanged(f.algorithm, p);
 		std::vector<float> buses(kNT_lastBus*4, 0);
@@ -141,5 +142,5 @@ void testChannelTenRouting()
 int main()
 {
 	testPagesAndDefaults(); testChannelTenRouting();
-	printf("PASS: 10 channels, 237 identities, output-page placement, locked defaults, channel-10 stereo routes and preset restoration at %.0f Hz\n",double(NT_globals.sampleRate));
+	printf("PASS: 10 channels, 241 identities, output-page placement, locked defaults, channel-10 stereo routes and preset restoration at %.0f Hz\n",double(NT_globals.sampleRate));
 }
