@@ -10,8 +10,9 @@
   amount** fader to set its level. Each send remembers its own level, and sends
   you have already set keep running. You can also assign a dedicated MIDI fader
   to each send.
-- A per-channel Offset page aligns late sources over a −30.0 to 0.0 ms range,
-  in 0.1 ms steps.
+- A per-channel Offset page compensates for latency in an external channel
+  insert, such as an iPad or PC effect. Mark the channel with the late return;
+  Witchboard delays the other channels to line up with it (up to 30 ms).
 - Up to ten channels fit alongside the expanded routing within the disting NT
   parameter limit.
 
@@ -403,29 +404,32 @@ Delay history stays populated at zero delay. After a live SC Off transition
 settles, Main adds no lookahead latency; manual Bypass Offset remains active.
 At SC Off and Bypass Offset zero there is no new steady-state latency.
 
-### Per-channel Offset — align a late insert return
+### Per-channel Offset — compensate for a late PC or iPad insert
 
-Use **Offset** when one channel returns later than the others after external
-processing—for example, when that channel passes through an iPad effect over a
-USB insert. Select the processed channel, then set its Offset negative. Witchboard
-uses that channel as the timing reference and delays the other channels to line
-up with it.
+If one channel goes out to an iPad or PC effect and comes back late, its drums
+or other transients can land behind the channels that stayed dry. Use Offset to
+line those paths up inside Witchboard.
 
-For example, if the iPad insert makes Channel 2 arrive about 12 ms late, set
-Channel to 2 and Offset to −12.0 ms. Channel 2 gets no additional alignment
-delay; the other channels are delayed by 12 ms. Fine-tune the value by ear or
-with a transient test. The range is −30.0 to 0.0 ms in 0.1 ms steps, and each
-channel keeps its own setting.
+For example, route Channel 2 through an iPad effect using a channel insert. If
+the round trip makes Channel 2 about 12 ms late, open the Offset page, set
+**Channel** to `2`, and set **Offset** to `−12.0 ms`. Channel selects which
+channel's timing you are describing; Offset sets how late that channel is.
+Witchboard leaves Channel 2 with no extra alignment delay and adds 12 ms to the
+other channels, so they meet at the mixer output. Each channel has its own
+Offset value. The range is `0` to `−30.0 ms` in `0.1 ms` steps; set the amount
+to the insert's round-trip delay, then fine-tune by listening or comparing a
+sharp transient.
 
-This compensates the timing difference inside Witchboard; it does not make the
-iPad return arrive earlier or remove its round-trip latency from the whole
-performance. With a −12.0 ms setting, the aligned mix is delayed by 12 ms. The
-most negative channel setting sets this common delay. Offset is applied after
-both channel inserts and before that channel's FX sends and Main/Bypass routing.
+This is delay compensation, not a way to make the iPad or PC return arrive
+earlier: Witchboard cannot remove the insert's round-trip latency. It holds the
+other channels back to match the late one, so a `−12.0 ms` setting means the
+aligned mix is delayed by 12 ms. The most negative channel setting determines
+that shared delay. Offset runs after both channel inserts and before the FX
+sends and Main/Bypass routing.
 
-Use this for a per-channel insert path. A **Master Insert** is after channels
-have been combined, so its round-trip delay affects the whole mix equally and
-does not need per-channel compensation.
+This applies when the late path belongs to one channel. A **Master Insert** is
+after the channels are combined; its latency affects the whole mix together, so
+per-channel Offset cannot compensate for it.
 
 Factory sidechain values are **Depth 69%**, **Lookahead 6 ms**, **Env Length about 300 ms**, **Curve +20**, and **Smooth 4% (8 ms)**. Sidechain itself defaults to **Off**, so enabling it gives the intended musical pump without forcing ducking on every new patch.
 

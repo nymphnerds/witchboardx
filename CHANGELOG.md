@@ -11,9 +11,13 @@
   use.
 - Support optional dedicated MIDI faders for each FX send, as well as a shared
   selected-send fader with pickup.
-- Add a per-channel Offset editor with a range of −30.0 to 0.0 ms in 0.1 ms
-  steps. Negative offsets align a late channel insert return by delaying the
-  other channels; they do not make the processed signal arrive earlier.
+- Add a per-channel Offset editor for latency compensation on a channel insert,
+  such as an iPad or PC effect. Select the channel with the late return and set
+  its Offset to the measured delay; for example, Channel 2 at −12 ms makes
+  Witchboard delay the other channels by 12 ms to meet it at the mixer output.
+  This aligns the paths but does not remove the insert's round-trip latency:
+  the complete mix is delayed by the same 12 ms. The range is −30.0 to 0.0 ms
+  in 0.1 ms steps.
 - Set the maximum channel count to ten so the expanded feature set stays within
   the disting NT's 241-parameter limit.
 - Add preset migration helpers and regression coverage for send editing, MIDI
