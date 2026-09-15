@@ -10,9 +10,9 @@
   amount** fader to set its level. Each send remembers its own level, and sends
   you have already set keep running. You can also assign a dedicated MIDI fader
   to each send.
-- A per-channel Offset page compensates for latency in an external channel
-  insert, such as an iPad or PC effect. Mark the channel with the late return;
-  Witchboard delays the other channels to line up with it (up to 30 ms).
+- **Latency Compensation** corrects timing differences when a channel passes
+  through an external insert, such as an iPad or PC effect. Set the late
+  channel's Offset; Witchboard delays the other channels to line up with it.
 - Up to ten channels fit alongside the expanded routing within the disting NT
   parameter limit.
 
@@ -404,7 +404,7 @@ Delay history stays populated at zero delay. After a live SC Off transition
 settles, Main adds no lookahead latency; manual Bypass Offset remains active.
 At SC Off and Bypass Offset zero there is no new steady-state latency.
 
-### Per-channel Offset — compensate for a late PC or iPad insert
+### Latency Compensation — align a late PC or iPad insert
 
 If one channel goes out to an iPad or PC effect and comes back late, its drums
 or other transients can land behind the channels that stayed dry. Use Offset to
