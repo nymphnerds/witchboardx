@@ -5,14 +5,14 @@
 ## What's new in v1.0.3
 
 - Six assignable insert routes (A–F), up from five.
-- Four shared stereo FX sends and returns, up from two. Map the new **Send
-  select** parameter to a button to choose an effect, then use one **Send
-  amount** fader to set its level. Each send remembers its own level, and sends
-  you have already set keep running. You can also assign a dedicated MIDI fader
-  to each send.
-- Latency Compensation per channel corrects timing differences when a
-  channel passes through an external insert, such as an iPad or PC effect. Set
-  the late channel's Offset; Witchboard delays the other channels to line up.
+- Four shared stereo FX sends and returns, up from two. Per-channel Send select
+  and Send amount provide one-fader access to all four buses, with independent
+  stored levels; active sends are unaffected by bus selection. Dedicated MIDI
+  faders remain available for direct control of individual sends.
+- Latency Compensation per channel aligns external insert returns, including
+  PC/iPad FX, with different round-trip delays. The most negative channel
+  Offset sets the reference; Witchboard delays faster paths to match, adding
+  the corresponding common latency to the mix. Range: 0 to −30 ms.
 - Up to ten channels fit alongside the expanded routing within the disting NT
   parameter limit.
 
