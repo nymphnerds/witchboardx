@@ -1,5 +1,7 @@
 # Shared insert return timing rebuild
 
+**Update:** This document records an earlier candidate and contains obsolete CPU and object-SHA status. Continue from [the CPU refinement handoff](SHARED_RETURNS_CPU_REFINEMENT_HANDOFF.md) for the measured `cdab0dd` build.
+
 ## Branch and scope
 
 - Worktree: `/home/nymph/DistingNT/WitchboardX-shared-returns`, branch `witchboardx-shared-returns`.
