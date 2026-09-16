@@ -967,6 +967,15 @@ void processDelay(StereoDelay& delay, float& left, float& right)
 {
 	delay.data[2 * delay.write] = left;
 	delay.data[2 * delay.write + 1] = right;
+	// Keep the history ring warm for a later live delay request, but avoid the
+	// read/return path when the delay is stably zero. This is the common case
+	// for per-channel Latency Compensation and saves work on every sample.
+	if (delay.current == 0 && delay.target == 0 && delay.requested == 0
+		&& delay.fadePosition == 0)
+	{
+		if (++delay.write == delay.capacity) delay.write = 0;
+		return;
+	}
 	// Finish a fade before adopting the latest request. Never reset an audible
 	// crossfade mid-flight, even if CV supplies a different delay every block.
 	if (delay.fadePosition == 0 && delay.current != delay.requested)
