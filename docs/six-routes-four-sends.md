@@ -1,6 +1,6 @@
 # Six routes, four sends
 
-WitchboardX supports 1–10 channels, six insert routes (A–F), and four complete FX send/return setups. Ten channels use **241 NT parameters**: 89 globals plus 15 per channel and two shared Offset editor controls. See [channel offsets](channel-offsets.md) for the appended IDs and preset behavior. Repeat Protection remains switchable. Switch fade appears only on Global.
+WitchboardX supports 1–10 channels, six insert routes (A–F), and four complete FX send/return setups. Ten channels use **241 NT parameters**: 89 globals plus 15 per channel and two insert return timing controls on Final Outputs. See [insert return timing](insert-return-timing.md) for the appended IDs and preset behavior. Repeat Protection remains switchable. Switch fade appears only on Global.
 
 ## Send editor
 
@@ -55,9 +55,9 @@ The included `presets/WitchboardX.json` is configured for ten channels, six rout
 The migration helper supports the personal eight-route/two-send preset schema
 with up to ten channels. It preserves other algorithms and refuses configured
 Route G/H assignments or unsupported mappings rather than silently dropping
-them. It does not convert older public-release schemas. Run the channel-offset
-helper after migration to append the Offset controls. Back up the source preset
-before converting it.
+them. It does not convert older public-release schemas. The resulting preset
+needs the two appended insert route timing controls `[1, 0]` and six zero
+`witchboardInsertReturnOffsets` values. Back up the source preset before converting it.
 
 To migrate a supported personal eight-route/two-send preset:
 

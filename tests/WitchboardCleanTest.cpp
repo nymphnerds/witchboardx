@@ -183,7 +183,7 @@ int main()
 		assert(channelRequirements.numParameters == static_cast<uint32_t>(91 + channels * 15));
 		_NT_algorithmMemoryPtrs pageMemory = allocateMemory(channelRequirements);
 		_NT_algorithm* pageAlgorithm = constructWitchboard(pageMemory,channelRequirements,channelSpecs);
-		assert(pageAlgorithm->parameterPages->numPages == static_cast<uint32_t>(6+channels));
+		assert(pageAlgorithm->parameterPages->numPages == static_cast<uint32_t>(5+channels));
 		const _NT_parameterPage& masterPage = pageAlgorithm->parameterPages->pages[4];
 		assert(strcmp(masterPage.name,"Sidechain/Master") == 0 && masterPage.numParams == 18);
 		for (int i = 0; i < 18; ++i) assert(masterPage.params[i] == masterPageParams[i]);
@@ -210,8 +210,8 @@ int main()
 	_NT_algorithmMemoryPtrs maxMemory = allocateMemory(maxChannelRequirements);
 	_NT_algorithm* maxAlgorithm = constructWitchboard(
 		maxMemory, maxChannelRequirements, maxChannelSpecs);
-	assert(algorithm->parameterPages->numPages == 10);
-	assert(maxAlgorithm->parameterPages->numPages == 6 + kMaxChannels);
+	assert(algorithm->parameterPages->numPages == 9);
+	assert(maxAlgorithm->parameterPages->numPages == 5 + kMaxChannels);
 
 	std::vector<int16_t> values(requirements.numParameters);
 	for (uint32_t i = 0; i < requirements.numParameters; ++i)

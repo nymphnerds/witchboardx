@@ -180,7 +180,7 @@
   "guid": "WtbX",
    "specs": [10,0,0]
    ,
-   "witchboardChannelOffsets": [0,0,0,0,0,0,0,0,0,0],
+   "witchboardInsertReturnOffsets": [0,0,0,0,0,0],
    "witchboardSendLevels": [[0,0,0,0]
     ,[25,0,0,0]
     ,[0,0,0,0]

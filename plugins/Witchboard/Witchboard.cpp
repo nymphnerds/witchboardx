@@ -376,8 +376,8 @@ struct SidechainRuntime
 	RampSmoothRuntime smooth;
 };
 
-// Stereo rings belong to each instance's DRAM; channel rings scale with channel count.
-constexpr int kChannelDelayCapacity = 2881; // 30 ms at 96 kHz + current sample
+// Stereo rings belong to each instance's DRAM; insert timing is route sized.
+constexpr int kInsertDelayCapacity = 1921; // 20 ms at 96 kHz + current sample
 constexpr int kMainDelayCapacity = 961;    // 10 ms at 96 kHz + current sample
 constexpr int kBypassDelayCapacity = 9601; // 100 ms at 96 kHz + current sample
 struct StereoDelay
@@ -423,15 +423,14 @@ struct WitchboardAlgorithm : public _NT_algorithm
 	SendState* sends;
 	SidechainRuntime sidechain;
 	MasterFilterRuntime masterFilter;
-	StereoDelay mainDelay, bypassDelay, offsetKeyDelay;
-	StereoDelay* channelDelays;
-	StereoDelay* sharedReturnDelays;
-	int16_t channelOffsets[kMaxChannels]; // tenths of a millisecond
-	int offsetSelected, offsetDisplayed;
-	bool offsetInitialised, offsetRestorePending, offsetPublishing;
-	uint8_t offsetPageParams[2];
-	int offsetChannelParam() const { return kNumGlobalParams + numChannels * kNumChannelParams; }
-	int offsetValueParam() const { return offsetChannelParam() + 1; }
+	StereoDelay mainDelay, bypassDelay, insertDryDelay, insertBypassDryDelay, insertKeyDelay;
+	StereoDelay* insertReturnDelays;
+	int16_t insertLatencies[kNumRoutes]; // tenths of a millisecond
+	int insertSelected, insertDisplayed;
+	bool insertInitialised, insertRestorePending, insertPublishing;
+	uint8_t finalOutputParams[kFinalOutputParams + 2];
+	int insertSelectParam() const { return kNumGlobalParams + numChannels * kNumChannelParams; }
+	int insertLatencyParam() const { return insertSelectParam() + 1; }
 	bool latencyInitialised;
 	int previousAuto, previousEffective, manualTrim;
 	bool savedTrim;
@@ -474,23 +473,22 @@ size_t requiredSram(int)
 size_t requiredDram(int channels)
 {
 	size_t size = 0;
-	size = addStorage<_NT_parameterPage>(size, 6 + channels);
+	size = addStorage<_NT_parameterPage>(size, 5 + channels);
 	size = addStorage<ChannelPage>(size, channels);
 	size = addStorage<ChannelRuntime>(size, channels);
 	size = addStorage<SendState>(size, channels);
 	size = addStorage<float>(size, 2 * (kMainDelayCapacity + kBypassDelayCapacity));
 	size = addStorage<_NT_parameter>(size, kNumGlobalParams + channels * kNumChannelParams + 2);
-	size = addStorage<StereoDelay>(size, channels);
-	size = addStorage<float>(size, 2 * kChannelDelayCapacity * (channels + 1));
+	size = addStorage<float>(size, 2 * kInsertDelayCapacity * 3);
 	size = addStorage<StereoDelay>(size, kNumRoutes);
-	size = addStorage<float>(size, 2 * kChannelDelayCapacity * kNumRoutes);
+	size = addStorage<float>(size, 2 * kInsertDelayCapacity * kNumRoutes);
 	return size;
 }
 
 WitchboardAlgorithm::WitchboardAlgorithm(int channels, uint8_t* dram)
 	: numChannels(channels)
 {
-	pageDefs = takeStorage<_NT_parameterPage>(dram, 6 + numChannels);
+	pageDefs = takeStorage<_NT_parameterPage>(dram, 5 + numChannels);
 	channelPages = takeStorage<ChannelPage>(dram, numChannels);
 	runtime = takeStorage<ChannelRuntime>(dram, numChannels);
 	sends = takeStorage<SendState>(dram, numChannels);
@@ -527,36 +525,38 @@ WitchboardAlgorithm::WitchboardAlgorithm(int channels, uint8_t* dram)
 		parameterTablesBuilt = true;
 	}
 	// Append controls after the instantiated channels: all existing IDs stay stable.
-	_NT_parameter* instanceParameters = takeStorage<_NT_parameter>(dram, offsetValueParam() + 1);
-	memcpy(instanceParameters, parameterDefs, sizeof(_NT_parameter) * offsetChannelParam());
-	instanceParameters[offsetChannelParam()] = parameterDefs[kMaxParams - 2];
-	instanceParameters[offsetChannelParam()].max = numChannels;
-	instanceParameters[offsetValueParam()] = parameterDefs[kMaxParams - 1];
+	_NT_parameter* instanceParameters = takeStorage<_NT_parameter>(dram, insertLatencyParam() + 1);
+	memcpy(instanceParameters, parameterDefs, sizeof(_NT_parameter) * insertSelectParam());
+	instanceParameters[insertSelectParam()] = parameterDefs[kMaxParams - 2];
+	instanceParameters[insertLatencyParam()] = parameterDefs[kMaxParams - 1];
 	parameters = instanceParameters;
-	channelDelays = takeStorage<StereoDelay>(dram, numChannels);
-	memset(channelDelays, 0, sizeof(StereoDelay) * numChannels);
-	memset(&offsetKeyDelay, 0, sizeof(offsetKeyDelay));
-	for (int i = 0; i <= numChannels; ++i)
+	memset(&insertDryDelay, 0, sizeof(insertDryDelay));
+	memset(&insertBypassDryDelay, 0, sizeof(insertBypassDryDelay));
+	memset(&insertKeyDelay, 0, sizeof(insertKeyDelay));
+	for (int i = 0; i < 3; ++i)
 	{
-		StereoDelay& delay = i < numChannels ? channelDelays[i] : offsetKeyDelay;
-		delay.capacity = kChannelDelayCapacity;
-		delay.data = takeStorage<float>(dram, 2 * kChannelDelayCapacity);
-		memset(delay.data, 0, sizeof(float) * 2 * kChannelDelayCapacity);
+		StereoDelay& delay = i == 0 ? insertDryDelay
+			: (i == 1 ? insertBypassDryDelay : insertKeyDelay);
+		delay.capacity = kInsertDelayCapacity;
+		delay.data = takeStorage<float>(dram, 2 * kInsertDelayCapacity);
+		memset(delay.data, 0, sizeof(float) * 2 * kInsertDelayCapacity);
 	}
-	sharedReturnDelays = takeStorage<StereoDelay>(dram, kNumRoutes);
-	memset(sharedReturnDelays, 0, sizeof(StereoDelay) * kNumRoutes);
+	insertReturnDelays = takeStorage<StereoDelay>(dram, kNumRoutes);
+	memset(insertReturnDelays, 0, sizeof(StereoDelay) * kNumRoutes);
 	for (int route = 0; route < kNumRoutes; ++route)
 	{
-		StereoDelay& delay = sharedReturnDelays[route];
-		delay.capacity = kChannelDelayCapacity;
-		delay.data = takeStorage<float>(dram, 2 * kChannelDelayCapacity);
-		memset(delay.data, 0, sizeof(float) * 2 * kChannelDelayCapacity);
+		StereoDelay& delay = insertReturnDelays[route];
+		delay.capacity = kInsertDelayCapacity;
+		delay.data = takeStorage<float>(dram, 2 * kInsertDelayCapacity);
+		memset(delay.data, 0, sizeof(float) * 2 * kInsertDelayCapacity);
 	}
-	memset(channelOffsets, 0, sizeof(channelOffsets));
-	offsetSelected = offsetDisplayed = 0;
-	offsetInitialised = offsetRestorePending = offsetPublishing = false;
-	offsetPageParams[0] = offsetChannelParam();
-	offsetPageParams[1] = offsetValueParam();
+	memset(insertLatencies, 0, sizeof(insertLatencies));
+	insertSelected = insertDisplayed = 0;
+	insertInitialised = insertRestorePending = insertPublishing = false;
+	for (int i = 0; i < kFinalOutputParams; ++i)
+		finalOutputParams[i] = finalOutputPageParams[i];
+	finalOutputParams[kFinalOutputParams] = insertSelectParam();
+	finalOutputParams[kFinalOutputParams + 1] = insertLatencyParam();
 	buildPages();
 	parameterPages = &pages;
 }
@@ -666,8 +666,8 @@ void WitchboardAlgorithm::setDefaultNames()
 
 void buildParameters()
 {
-	setParameter(parameterDefs[kMaxParams - 2], "Channel", 1, kMaxChannels, 1, kNT_unitNone);
-	setParameter(parameterDefs[kMaxParams - 1], "Offset", -300, 0, 0, kNT_unitMs);
+	setParameter(parameterDefs[kMaxParams - 2], "Insert route", 1, kNumRoutes, 1, kNT_unitNone);
+	setParameter(parameterDefs[kMaxParams - 1], "Insert return offset", 0, 200, 0, kNT_unitMs);
 	parameterDefs[kMaxParams - 1].scaling = kNT_scaling10;
 	setParameter(parameterDefs[kParamFadeMs], "Switch fade", 0, 100, 2, kNT_unitMs);
 
@@ -798,10 +798,10 @@ void WitchboardAlgorithm::buildPages()
 
 	pageDefs[page++] = {
 		.name = "Final Outputs",
-		.numParams = kFinalOutputParams,
+		.numParams = kFinalOutputParams + 2,
 		.group = 3,
 		.unused = { 0, 0 },
-		.params = finalOutputPageParams,
+		.params = finalOutputParams,
 	};
 
 	pageDefs[page++] = {
@@ -838,13 +838,6 @@ void WitchboardAlgorithm::buildPages()
 		};
 	}
 
-	pageDefs[page++] = {
-		.name = "Offset",
-		.numParams = 2,
-		.group = static_cast<uint8_t>(6 + numChannels),
-		.unused = { 0, 0 },
-		.params = offsetPageParams,
-	};
 	pages.numPages = page;
 	pages.pages = pageDefs;
 }
@@ -980,8 +973,7 @@ void processDelay(StereoDelay& delay, float& left, float& right)
 	delay.data[2 * delay.write] = left;
 	delay.data[2 * delay.write + 1] = right;
 	// Keep the history ring warm for a later live delay request, but avoid the
-	// read/return path when the delay is stably zero. This is the common case
-	// for per-channel Latency Compensation and saves work on every sample.
+	// read/return path when the delay is stably zero.
 	if (delay.current == 0 && delay.target == 0 && delay.requested == 0
 		&& delay.fadePosition == 0)
 	{
@@ -1012,8 +1004,19 @@ void processDelay(StereoDelay& delay, float& left, float& right)
 	if (++delay.write == delay.capacity) delay.write = 0;
 }
 
-// Shared routes may stop and restart. Keep their validity separate from the
-// established channel, key, Main and Bypass delay behavior.
+// Insert routes and the aggregate dry path may stop and restart. A cold ring
+// starts at zero delay, then fades to the requested tap after it has history.
+void setPrimedDelay(StereoDelay& delay, int samples, int fadeSamples)
+{
+	if (!delay.initialised)
+	{
+		delay.valid = delay.write = delay.current = delay.target = 0;
+		delay.requested = delay.fadePosition = 0;
+		delay.initialised = true;
+	}
+	setDelay(delay, samples, fadeSamples);
+}
+
 void processSharedReturnDelay(StereoDelay& delay, float& left, float& right)
 {
 	delay.data[2 * delay.write] = left;
@@ -1387,29 +1390,29 @@ void midiMessage(_NT_algorithm* algorithm, uint8_t status, uint8_t cc, uint8_t v
 	}
 }
 
-// Shared editor: metadata is authoritative after restore. Publishing a selected
-// channel's value must never write that value into another channel.
-void syncOffsetEditor(WitchboardAlgorithm* self)
+// The selected route edits one stored roundtrip value. Preset metadata wins
+// over the old channel-offset parameter values on restore.
+void syncInsertLatencyEditor(WitchboardAlgorithm* self)
 {
-	if (self->offsetPublishing) return;
-	const int selected = clampInt(self->v[self->offsetChannelParam()] - 1, 0, self->numChannels - 1);
-	const int amount = clampInt(self->v[self->offsetValueParam()], -300, 0);
-	if (!self->offsetInitialised || self->offsetRestorePending)
+	if (self->insertPublishing) return;
+	const int selected = clampInt(self->v[self->insertSelectParam()] - 1, 0, kNumRoutes - 1);
+	const int amount = clampInt(self->v[self->insertLatencyParam()], 0, 200);
+	if (!self->insertInitialised || self->insertRestorePending)
 	{
-		if (!self->offsetRestorePending) self->channelOffsets[selected] = amount;
-		self->offsetInitialised = true;
-		self->offsetRestorePending = false;
+		if (!self->insertRestorePending) self->insertLatencies[selected] = amount;
+		self->insertInitialised = true;
+		self->insertRestorePending = false;
 	}
-	else if (selected == self->offsetSelected && amount != self->offsetDisplayed)
-		self->channelOffsets[selected] = amount;
-	self->offsetSelected = selected;
-	self->offsetDisplayed = self->channelOffsets[selected];
-	if (self->v[self->offsetValueParam()] == self->offsetDisplayed) return;
+	else if (selected == self->insertSelected && amount != self->insertDisplayed)
+		self->insertLatencies[selected] = amount;
+	self->insertSelected = selected;
+	self->insertDisplayed = self->insertLatencies[selected];
+	if (self->v[self->insertLatencyParam()] == self->insertDisplayed) return;
 	const int index = NT_algorithmIndex(self);
 	if (index < 0) return;
-	self->offsetPublishing = true;
-	NT_setParameterFromAudio(index, self->offsetValueParam() + NT_parameterOffset(), self->offsetDisplayed);
-	self->offsetPublishing = false;
+	self->insertPublishing = true;
+	NT_setParameterFromAudio(index, self->insertLatencyParam() + NT_parameterOffset(), self->insertDisplayed);
+	self->insertPublishing = false;
 }
 
 // NT parameter changes can arrive outside the audio step. Invalidate only the
@@ -1421,9 +1424,9 @@ void parameterChanged(_NT_algorithm* algorithm, int parameter)
 	if (!self)
 		return;
 
-	if (parameter == self->offsetChannelParam() || parameter == self->offsetValueParam())
+	if (parameter == self->insertSelectParam() || parameter == self->insertLatencyParam())
 	{
-		syncOffsetEditor(self);
+		syncInsertLatencyEditor(self);
 		return;
 	}
 	if (parameter < kNumGlobalParams)
@@ -1501,7 +1504,7 @@ inline void processPath(OutputPair* outputs,
 	const float* const* returnLeft, const float* const* returnRight,
 	const bool* returnStereo, int frame, float left, float right, bool stereo,
 	int route1, int route2, bool repeatProtection,
-	float pathGain, float channelGain, const uint8_t* routeUsers,
+	float pathGain, float channelGain, const bool* deferredRoutes,
 	bool* sharedUsed, float& collectedLeft, float& collectedRight)
 {
 	if (pathGain <= 0.0f)
@@ -1512,7 +1515,7 @@ inline void processPath(OutputPair* outputs,
 	if (repeatProtection && route1 >= 0 && route2 == route1)
 		route2 = -1;
 	const int finalRoute = route2 >= 0 ? route2 : route1;
-	const bool shared = finalRoute >= 0 && routeUsers[finalRoute] > 1;
+	const bool shared = finalRoute >= 0 && deferredRoutes[finalRoute];
 
 	float intermediateLeft = left;
 	float intermediateRight = right;
@@ -1759,7 +1762,6 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 	const int fadeDelaySamples = millisecondsToSamples(5.0f, sampleRate);
 	setDelay(self->mainDelay, sidechainEnabled
 		? millisecondsToSamples(self->v[kParamSidechainLookahead] * 0.1f, sampleRate) : 0, fadeDelaySamples);
-	setDelay(self->bypassDelay, millisecondsToSamples(effectiveBypass * 0.1f, sampleRate), fadeDelaySamples);
 	// Cache control coefficients instead of recomputing them every audio block.
 	if (self->cachedSampleRate != sampleRate
 		|| self->cachedLengthControl != self->v[kParamSidechainEnvLength]
@@ -1794,15 +1796,7 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 		fxOutput[fx] = self->v[fxParam(fx, 6)] == kOutputPathBypass ? 1 : 0;
 	}
 
-	syncOffsetEditor(self);
-	int baseOffset = 0;
-	for (int channel = 0; channel < self->numChannels; ++channel)
-		if (-self->channelOffsets[channel] > baseOffset) baseOffset = -self->channelOffsets[channel];
-	const int baseOffsetSamples = millisecondsToSamples(baseOffset * 0.1f, sampleRate);
-	setDelay(self->offsetKeyDelay, baseOffsetSamples, fadeDelaySamples);
-	for (int channel = 0; channel < self->numChannels; ++channel)
-		setDelay(self->channelDelays[channel], baseOffsetSamples
-			- millisecondsToSamples(-self->channelOffsets[channel] * 0.1f, sampleRate), fadeDelaySamples);
+	syncInsertLatencyEditor(self);
 
 	ChannelBlockState channelState[kMaxChannels];
 	for (int channel = 0; channel < self->numChannels; ++channel)
@@ -1848,7 +1842,6 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 		}
 	}
 	uint8_t routeUsers[kNumRoutes] = {};
-	int sharedOffset[kNumRoutes] = {};
 	for (int channel = 0; channel < self->numChannels; ++channel)
 	{
 		if (!channelState[channel].enabled) continue;
@@ -1856,34 +1849,65 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 			self->runtime[channel], repeatProtection);
 		for (int route = 0; route < kNumRoutes; ++route)
 			if (mask & (1u << route))
-			{
 				++routeUsers[route];
-				if (self->channelOffsets[channel] < sharedOffset[route])
-					sharedOffset[route] = self->channelOffsets[channel];
-			}
 	}
-	bool anyShared = false;
+	int maxInsertLatency = 0;
+	bool deferredRoutes[kNumRoutes] = {};
+	bool anyDeferred = false;
 	for (int route = 0; route < kNumRoutes; ++route)
 	{
-		StereoDelay& delay = self->sharedReturnDelays[route];
-		if (routeUsers[route] > 1)
-		{
-			anyShared = true;
-			setDelay(delay, baseOffsetSamples
-				- millisecondsToSamples(-sharedOffset[route] * 0.1f, sampleRate), fadeDelaySamples);
-		}
+		if (routeUsers[route] && self->insertLatencies[route] > maxInsertLatency)
+			maxInsertLatency = self->insertLatencies[route];
+		deferredRoutes[route] = routeUsers[route] > 1
+			|| (routeUsers[route] && self->insertLatencies[route] > 0);
+		if (deferredRoutes[route])
+			anyDeferred = true;
 		else
 		{
+			StereoDelay& delay = self->insertReturnDelays[route];
 			delay.initialised = false;
 			delay.valid = delay.write = delay.current = delay.target = 0;
 			delay.requested = delay.fadePosition = 0;
 		}
 	}
+	const int maxInsertSamples = millisecondsToSamples(maxInsertLatency * 0.1f, sampleRate);
+	if (maxInsertSamples > 0 || self->insertDryDelay.current != 0
+		|| self->insertDryDelay.fadePosition != 0)
+		setPrimedDelay(self->insertDryDelay, maxInsertSamples, fadeDelaySamples);
+	else
+		self->insertDryDelay.initialised = false;
+	if (maxInsertSamples > 0 || self->insertBypassDryDelay.current != 0
+		|| self->insertBypassDryDelay.fadePosition != 0)
+		setPrimedDelay(self->insertBypassDryDelay, maxInsertSamples, fadeDelaySamples);
+	else
+		self->insertBypassDryDelay.initialised = false;
+	if (sidechainEnabled)
+	{
+		if (maxInsertSamples > 0 || self->insertKeyDelay.current != 0
+			|| self->insertKeyDelay.fadePosition != 0)
+			setPrimedDelay(self->insertKeyDelay, maxInsertSamples, fadeDelaySamples);
+	}
+	else
+		self->insertKeyDelay.initialised = false;
+	for (int route = 0; route < kNumRoutes; ++route)
+		if (deferredRoutes[route])
+		{
+			const int requested = maxInsertSamples
+				- millisecondsToSamples(self->insertLatencies[route] * 0.1f, sampleRate);
+			StereoDelay& delay = self->insertReturnDelays[route];
+			if (requested > 0 || delay.current != 0 || delay.fadePosition != 0)
+				setPrimedDelay(delay, requested, fadeDelaySamples);
+			else
+				delay.initialised = false;
+		}
+	setDelay(self->bypassDelay,
+		millisecondsToSamples(effectiveBypass * 0.1f, sampleRate), fadeDelaySamples);
 
 	for (int frame = 0; frame < numFrames; ++frame)
 	{
 		bool sharedUsed[kNumRoutes] = {};
-		float sharedRadiant[kNumRoutes] = {};
+		float sharedSend[kNumRoutes][kNumFx] = {};
+		int sharedOutput[kNumRoutes] = {};
 		float mainLeft = 0.0f;
 		float mainRight = 0.0f;
 		float bypassLeft = 0.0f;
@@ -1913,11 +1937,7 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 				state.moving = channelMoving(rt);
 			}
 			if (!state.enabled)
-			{
-				float silentLeft = 0, silentRight = 0;
-				processDelay(self->channelDelays[channel], silentLeft, silentRight);
 				continue;
-			}
 			float channelLeft = 0, channelRight = 0;
 			bool channelSharedUsed[kNumRoutes] = {};
 
@@ -1926,12 +1946,12 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 
 			if (rt.insertSamplesRemaining[0] == 0 && rt.insertSamplesRemaining[1] == 0)
 			{
-				if (anyShared)
+				if (anyDeferred)
 					processPath(outputs, returnLeft, returnRight, returnStereo,
 						frame, left, right, state.stereo,
 						state.routes[0][rt.insertState[0]],
 						state.routes[1][rt.insertState[1]],
-						repeatProtection, 1.0f, rt.gain.value, routeUsers,
+						repeatProtection, 1.0f, rt.gain.value, deferredRoutes,
 						channelSharedUsed, channelLeft, channelRight);
 				else
 					processPath(outputs, returnLeft, returnRight, returnStereo,
@@ -1950,12 +1970,12 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 					for (int insert2 = 0; insert2 < kNumInsertStates; ++insert2)
 					{
 						const float gain = rt.insertGain[0][insert1] * rt.insertGain[1][insert2];
-						if (anyShared)
+						if (anyDeferred)
 							processPath(outputs, returnLeft, returnRight, returnStereo,
 								frame, left, right, state.stereo,
 								state.routes[0][insert1],
 								state.routes[1][insert2],
-								repeatProtection, gain, rt.gain.value, routeUsers,
+								repeatProtection, gain, rt.gain.value, deferredRoutes,
 								channelSharedUsed, channelLeft, channelRight);
 						else
 							processPath(outputs, returnLeft, returnRight, returnStereo,
@@ -1967,35 +1987,52 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 					}
 				}
 			}
-			processDelay(self->channelDelays[channel], channelLeft, channelRight);
-			if (anyShared)
+			if (anyDeferred)
 			{
 				const int stableFinal = finalInsertRoute(state, rt.insertState[0],
 					rt.insertState[1], repeatProtection);
 				if (rt.insertSamplesRemaining[0] == 0 && rt.insertSamplesRemaining[1] == 0
-					&& stableFinal >= 0 && routeUsers[stableFinal] > 1)
+					&& stableFinal >= 0 && deferredRoutes[stableFinal])
 					channelLeft = channelRight = 0.0f;
 			}
 			mixChannelSignal(outputs, frame, state.outputIndex, channelLeft, channelRight, state.fxGains);
-			if (anyShared)
+			if (anyDeferred)
 				for (int route = 0; route < kNumRoutes; ++route)
 					if (channelSharedUsed[route])
 					{
 						sharedUsed[route] = true;
-						if (state.fxGains[0].wet > sharedRadiant[route])
-							sharedRadiant[route] = state.fxGains[0].wet;
+						if (routeUsers[route] == 1)
+							sharedOutput[route] = state.outputIndex;
+						for (int fx = 0; fx < kNumFx; ++fx)
+							if (state.fxGains[fx].wet > sharedSend[route][fx])
+								sharedSend[route][fx] = state.fxGains[fx].wet;
 					}
 		}
-		if (anyShared)
+		if (self->insertDryDelay.initialised)
+			processSharedReturnDelay(self->insertDryDelay, mainLeft, mainRight);
+		if (self->insertBypassDryDelay.initialised)
+			processSharedReturnDelay(self->insertBypassDryDelay, bypassLeft, bypassRight);
+		if (anyDeferred)
 			for (int route = 0; route < kNumRoutes; ++route)
 			{
 				if (!sharedUsed[route]) continue;
 				float left = returnLeft[route] ? returnLeft[route][frame] : 0.0f;
 				float right = returnRight[route] ? returnRight[route][frame] : left;
-				processSharedReturnDelay(self->sharedReturnDelays[route], left, right);
-				mainLeft += left;
-				mainRight += returnStereo[route] ? right : left;
-				addSignal(outputs[2], frame, left, right, returnStereo[route], sharedRadiant[route]);
+				if (self->insertReturnDelays[route].initialised)
+					processSharedReturnDelay(self->insertReturnDelays[route], left, right);
+				if (sharedOutput[route] == kOutputPathBypass)
+				{
+					bypassLeft += left;
+					bypassRight += returnStereo[route] ? right : left;
+				}
+				else
+				{
+					mainLeft += left;
+					mainRight += returnStereo[route] ? right : left;
+				}
+				for (int fx = 0; fx < kNumFx; ++fx)
+					addSignal(outputs[2 + fx], frame, left, right,
+						returnStereo[route], sharedSend[route][fx]);
 			}
 
 		advanceSmooth(self->masterGain);
@@ -2003,7 +2040,8 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 
 		float keyMagnitude = sidechainKey ? sidechainKey[frame] : 0.0f;
 		float keyRight = keyMagnitude;
-		processDelay(self->offsetKeyDelay, keyMagnitude, keyRight);
+		if (self->insertKeyDelay.initialised)
+			processSharedReturnDelay(self->insertKeyDelay, keyMagnitude, keyRight);
 		const float sidechainGain = sidechainEnabled
 			? processSidechain(self->sidechain, keyMagnitude, envSamples, beta, smoothSamples, depth) : 1.0f;
 		processDelay(self->mainDelay, mainLeft, mainRight);
@@ -2048,14 +2086,14 @@ void serialise(_NT_algorithm* algorithm, _NT_jsonStream& stream)
 {
 	WitchboardAlgorithm* self = static_cast<WitchboardAlgorithm*>(algorithm);
 	// Capture a pending value edit without calling the audio-only host setter here.
-	const int selected = clampInt(self->v[self->offsetChannelParam()] - 1, 0, self->numChannels - 1);
-	const bool editorCurrent = !self->offsetRestorePending
-		&& (!self->offsetInitialised || selected == self->offsetSelected);
-	stream.addMemberName("witchboardChannelOffsets");
+	const int selected = clampInt(self->v[self->insertSelectParam()] - 1, 0, kNumRoutes - 1);
+	const bool editorCurrent = !self->insertRestorePending
+		&& (!self->insertInitialised || selected == self->insertSelected);
+	stream.addMemberName("witchboardInsertReturnOffsets");
 	stream.openArray();
-	for (int channel = 0; channel < self->numChannels; ++channel)
-		stream.addNumber(editorCurrent && channel == selected
-			? clampInt(self->v[self->offsetValueParam()], -300, 0) : self->channelOffsets[channel]);
+	for (int route = 0; route < kNumRoutes; ++route)
+		stream.addNumber(editorCurrent && route == selected
+			? clampInt(self->v[self->insertLatencyParam()], 0, 200) : self->insertLatencies[route]);
 	stream.closeArray();
 	stream.addMemberName("witchboardSendLevels");
 	stream.openArray();
@@ -2215,25 +2253,25 @@ bool deserialise(_NT_algorithm* algorithm, _NT_jsonParse& parse)
 	WitchboardAlgorithm* self = static_cast<WitchboardAlgorithm*>(algorithm);
 	self->latencyInitialised = false;
 	self->savedTrim = false;
-	memset(self->channelOffsets, 0, sizeof(self->channelOffsets));
-	self->offsetRestorePending = true;
+	memset(self->insertLatencies, 0, sizeof(self->insertLatencies));
+	self->insertRestorePending = true;
 	int members = 0;
 	if (!parse.numberOfObjectMembers(members))
 		return false;
 	for (int member = 0; member < members; ++member)
 	{
-		if (parse.matchName("witchboardChannelOffsets"))
+		if (parse.matchName("witchboardInsertReturnOffsets"))
 		{
 			int count;
-			int16_t offsets[kMaxChannels] = {};
-			if (!parse.numberOfArrayElements(count) || count != self->numChannels) return false;
+			int16_t offsets[kNumRoutes] = {};
+			if (!parse.numberOfArrayElements(count) || count != kNumRoutes) return false;
 			for (int i = 0; i < count; ++i)
 			{
 				int value;
-				if (!parse.number(value) || value < -300 || value > 0) return false;
+				if (!parse.number(value) || value < 0 || value > 200) return false;
 				offsets[i] = value;
 			}
-			memcpy(self->channelOffsets, offsets, sizeof(offsets));
+			memcpy(self->insertLatencies, offsets, sizeof(offsets));
 			continue;
 		}
 		if (parse.matchName("witchboardSendLevels"))

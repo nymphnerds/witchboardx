@@ -71,20 +71,19 @@ $(BUILD_DIR)/WitchboardSendsTest-%: tests/WitchboardSendsTest.cpp tests/Witchboa
 test-sends: $(SEND_TESTS)
 	@set -e; for test in $(SEND_TESTS); do "$$test"; done
 
-OFFSET_TESTS := $(foreach rate,32000 44100 48000 96000,$(BUILD_DIR)/WitchboardOffsetsTest-$(rate))
+INSERT_TIMING_TESTS := $(foreach rate,32000 44100 48000 96000,$(BUILD_DIR)/WitchboardInsertTimingTest-$(rate))
 
-$(BUILD_DIR)/WitchboardOffsetsTest-%: tests/WitchboardOffsetsTest.cpp tests/WitchboardCleanTest.cpp tests/NtJsonTestHost.h $(SOURCE) $(API_HEADER) | check-api $(BUILD_DIR)
+$(BUILD_DIR)/WitchboardInsertTimingTest-%: tests/WitchboardInsertTimingTest.cpp tests/WitchboardCleanTest.cpp tests/NtJsonTestHost.h $(SOURCE) $(API_HEADER) | check-api $(BUILD_DIR)
 	$(HOST_CXX) $(HOST_FLAGS) -DWITCHBOARD_TEST_SAMPLE_RATE=$* -I"$(INCLUDE_PATH)" "$<" -o "$@"
 
-.PHONY: test-offsets
-test-offsets: $(OFFSET_TESTS)
-	@set -e; for test in $(OFFSET_TESTS); do "$$test"; done
+.PHONY: test-insert-timing
+test-insert-timing: $(INSERT_TIMING_TESTS)
+	@set -e; for test in $(INSERT_TIMING_TESTS); do "$$test"; done
 
-test: $(HOST_TEST) test-gain test-ducker test-channels test-sends test-offsets
+test: $(HOST_TEST) test-gain test-ducker test-channels test-sends test-insert-timing
 	"$(HOST_TEST)"
 	python3 tests/test_preset_migration.py
 	python3 tests/test_four_send_migration.py
-	python3 tests/test_channel_offsets_migration.py
 
 hardware: $(OUTPUT)
 

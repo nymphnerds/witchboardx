@@ -1,26 +1,26 @@
-# Shared insert returns rebuilt from stable main
+# Shared insert return timing rebuild
 
-## Source and scope
+## Branch and scope
 
-- Branch/worktree: `witchboardx-shared-returns-rebuild` at `/home/nymph/DistingNT/WitchboardX-shared-returns-rebuild` in `NymphsCore_Lite`.
-- Base: clean `Witchboard-master/main` commit `4eb5eae`. Main and the earlier cutout worktree were not changed by this rebuild.
-- The previous shared returns implementation was not copied. This branch adds route ownership around the main branch's existing inserts and delays.
-- Existing NT parameter IDs, preset layout, sidechain envelope, channel delay, Main delay, and Bypass delay behavior remain as on main.
+- Worktree: `/home/nymph/DistingNT/WitchboardX-shared-returns`, branch `witchboardx-shared-returns`.
+- Stable main remains in `/home/nymph/DistingNT/Witchboard-master` and was not edited.
+- The prior per-channel negative offset system and Offset page are removed from this branch. The 241 parameter budget is preserved by reusing the two appended editor IDs for **Insert route** and **Insert return offset** on **Final Outputs**.
+- SC Lookahead stays on **Sidechain/Master**. Bypass Offset stays on **Final Outputs** and retains the main baseline's auto-follow behavior.
+- FX sends and FX returns keep their normal routing. There is no Send FX return offset control in this first version.
 
-## Signal and timing dependencies
+## Timing model
 
-1. Each enabled channel sends its normal gained signal through Insert 1 and, if selected, Insert 2. Repeat Protection determines the effective final route.
-2. One route used as the final insert by multiple channels returns one already-summed signal. The plugin reads and mixes it to Main once, with no extra dry return copy or contributor-count normalization.
-3. Existing Send 1/Radiant levels remain per-channel. The single shared return feeds Radiant once at the highest active contributor's Send 1 wet gain, without reducing Main.
-4. Existing global offset base and Sidechain key alignment remain on main's timing path. A shared return has its own delay line after the physical return. Its most negative contributor offset wins; no contributor's channel delay is applied to that shared return.
-5. Insert fades may have multiple active paths. Route-use metadata includes all potentially active final paths, while the audio loop marks which shared paths actually contributed in each frame.
+The highest configured offset among active physical insert routes sets the common reference. The aggregate Main dry path, aggregate Bypass dry path, and active sidechain key are delayed by that amount. A deferred insert return uses a route delay of `reference - route offset`. The route's physical return is read once, including when multiple channels share it. Its Send FX contribution uses the largest active contributor send amount. The delay rings are allocated at construction; there is no audio-loop allocation.
 
-## Memory and CPU scope
+The current model treats each route setting as the effective latency of the final insert return. Serial Insert 1 + Insert 2 paths with different external latencies and a shared final route require device validation before relying on exact alignment.
 
-Six stereo route delay rings are allocated in NT DRAM at construction. Ten-channel host DRAM requirement is 486,080 bytes, versus about 347 KiB in the previous worktree. There is no allocation in `step()`. Route delay processing runs only when a route is shared and carries a return. Ordinary single-channel insert paths retain main's delay implementation. NT CPU load and cutout behavior remain unmeasured.
+## Measured host results
 
-## Verification and hardware gate
+- Ten-channel DRAM requirement: **232,072 bytes** (host layout), versus **486,080 bytes** in the earlier tested shared-return/offset branch. The unchanged main baseline was about **347,424 bytes**.
+- 24-frame host loop with one inserted channel and 20 ms compensation: **1.20 µs/block** for this branch versus **1.15 µs/block** for main in the same compiler/test setup. This is an approximate relative CPU check, not an NT meter reading.
+- All host routing, gain, sidechain, sends, timing, preset, and 32/44.1/48/96 kHz tests pass. ARM object inspection passes against the official API headers.
+- The earlier tested object was preserved at `/tmp/WitchboardX-shared-returns-tested-a748d29.o` (SHA-256 `490251af77208554e79fceb31bd07964580dbef900a2edbba8aba018f6557399`). The candidate is `plugins/WitchboardX.o` (SHA-256 `2af21e7f44694db435857396f25d6cdd932db46bff8e5a576af3b7e84cec228e`).
 
-- `make verify` passed: gain, sidechain, channels, sends, offsets, shared return level and fade tests at 32, 44.1, 48, and 96 kHz; preset migrations; ARM object inspection.
-- Candidate `plugins/WitchboardX.o` SHA-256: `5eebc4a5adefee63cef58cac93e4c629c8dcadfc433917c080f05b79a8db4562`.
-- Do not treat host success as proof of a cutout fix. On NT, first confirm the stable main object with the same patch, then load this candidate and test: one neutral insert; one stereo iPad insert with zero and negative offsets; two channels sharing a route with Send 1 zero/nonzero; mixed contributor offsets; and Sidechain enabled. Watch for cutouts after several minutes and during insert/offset changes.
+## NT test gate
+
+With the same preset and sample rate, compare stable main and this candidate with Poly Res enabled. First run one stereo iPad insert with route offset 0 then 20 ms; watch Witchboard CPU, overall CPU, and continuous audio for longer than the previous cutout interval. Then test two channels sharing one physical return, Send 1 at different levels, SC enabled, bypass output, and a live offset change. Host success does not establish that the NT cutout is fixed.

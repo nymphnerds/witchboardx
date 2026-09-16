@@ -28,7 +28,7 @@ void testPagesAndDefaults()
 	TenChannels f;
 	assert(specifications[0].max == 10 && specifications[0].def == 10);
 	assert(f.requirements.numParameters == 241);
-	assert(f.algorithm->parameterPages->numPages == 16);
+	assert(f.algorithm->parameterPages->numPages == 15);
 	assert(kParamBypassOffset == 88);
 	assert(kNumGlobalParams == 89 && kNumChannelParams == 15);
 	bool seen[241] = {};
@@ -51,9 +51,9 @@ void testPagesAndDefaults()
 		}
 	}
 	const auto& outputs = f.algorithm->parameterPages->pages[2];
-	const int expectedOutputs[] = {37,38,39,40,88};
-	assert(strcmp(outputs.name, "Final Outputs") == 0 && outputs.numParams == 5);
-	for (int i = 0; i < 5; ++i) assert(outputs.params[i] == expectedOutputs[i]);
+	const int expectedOutputs[] = {37,38,39,40,88,239,240};
+	assert(strcmp(outputs.name, "Final Outputs") == 0 && outputs.numParams == 7);
+	for (int i = 0; i < 7; ++i) assert(outputs.params[i] == expectedOutputs[i]);
 	const auto& master = f.algorithm->parameterPages->pages[4];
 	assert(master.numParams == 18);
 	for (int i = 0; i < 7; ++i) assert(master.params[i] == 70+i);
@@ -68,7 +68,7 @@ void testPagesAndDefaults()
 	assert(f.values[kParamMasterFilterHpCutoff] == 70);
 	assert(f.values[kParamMasterFilterEnable] == 0 && f.values[kParamMasterFilterSweep] == 0);
 	assert(f.values[kParamMasterGain] == 0);
-	// Each extra channel adds its own 30 ms stereo DRAM ring.
+	// Extra channels only add state; insert delay storage is shared by route.
 	const int32_t nineSpecs[] = {9};
 	_NT_algorithmRequirements nine = {};
 	calculateRequirements(nine, nineSpecs);
