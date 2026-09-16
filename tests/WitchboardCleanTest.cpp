@@ -566,7 +566,7 @@ int main()
 	assert(routingValues[channelBase(0) + kChannelInsert1] == 1);
 	assert(routingValues[channelBase(1) + kChannelInsert1] == 1);
 	assertBus(buses, routeSendBus, 3.0f);
-	assertBus(buses, mainBus, 20.0f);
+	assertBus(buses, mainBus, 10.0f);
 
 	routingValues[channelBase(1) + kChannelInsert2] = 1;
 	buses.assign(kNT_lastBus * 4, 0.0f);
@@ -577,7 +577,7 @@ int main()
 	assert(routingValues[channelBase(1) + kChannelInsert1] == 1);
 	assert(routingValues[channelBase(1) + kChannelInsert2] == 1);
 	assertBus(buses, routeSendBus, 3.0f);
-	assertBus(buses, mainBus, 20.0f);
+	assertBus(buses, mainBus, 10.0f);
 
 	routingValues[kParamRepeatProtection] = 0;
 	buses.assign(kNT_lastBus * 4, 0.0f);
@@ -586,7 +586,7 @@ int main()
 	fillBus(buses, routeReturnBus, 10.0f);
 	step(routingAlgorithm, buses.data(), 1);
 	assertBus(buses, routeSendBus, 13.0f);
-	assertBus(buses, mainBus, 20.0f);
+	assertBus(buses, mainBus, 10.0f);
 	routingValues[kParamRepeatProtection] = 1;
 
 	routingValues[kParamFadeMs] = 2;

@@ -191,6 +191,71 @@ void testOffsetSidechainAlignment()
     }
 }
 
+void testSharedFinalInsertReturn()
+{
+    OffsetFixture f(3);
+    f.v[channelBase(0)+kChannelInputL] = 1;
+    f.v[channelBase(1)+kChannelInputL] = 2;
+    f.v[channelBase(2)+kChannelInputL] = 3;
+    f.v[channelBase(0)+kChannelInsert1] = 1;
+    f.v[channelBase(1)+kChannelInsert1] = 1;
+    f.v[routeParam(0,kRouteOutputL)] = 21;
+    f.v[routeParam(0,kRouteReturnL)] = 7;
+    f.v[kParamFx1L] = 17;
+    f.v[channelBase(0)+kChannelSendAmount] = 25;
+    f.offset(1,-100);
+    f.offset(2,-200);
+    const int base = millisecondsToSamples(20,NT_globals.sampleRate);
+    for (int start=0; start<base+8; start+=4)
+    {
+        std::vector<float> buses(kNT_lastBus*4,0);
+        if (start==0)
+        {
+            busSample(buses,1,0)=1;
+            busSample(buses,2,0)=2;
+            busSample(buses,3,0)=3;
+            busSample(buses,7,0)=10;
+        }
+        step(f.alg,buses.data(),1);
+        for (int n=0; n<4; ++n)
+        {
+            const int t=start+n;
+            assertClose(busSample(buses,21,n),t==0?3:0);
+            assertClose(busSample(buses,13,n),(t==0?10:0)+(t==base?3:0));
+            assertClose(busSample(buses,17,n),t==0?5:0);
+        }
+    }
+    assert(f.alg->sharedReturnDelays[0].requested == 0);
+}
+
+void testSharedReturnDuringInsertFade()
+{
+    OffsetFixture f(2);
+    f.v[channelBase(0)+kChannelInputL] = 1;
+    f.v[channelBase(1)+kChannelInputL] = 2;
+    f.v[channelBase(0)+kChannelInsert1] = 1;
+    f.v[routeParam(0,kRouteOutputL)] = 21;
+    f.v[routeParam(0,kRouteReturnL)] = 7;
+    std::vector<float> buses(kNT_lastBus*4,0);
+    fillBus(buses,1,1); fillBus(buses,2,2); fillBus(buses,7,10);
+    step(f.alg,buses.data(),1);
+    assertBus(buses,13,12);
+    f.v[kParamFadeMs] = 2;
+    f.v[channelBase(1)+kChannelInsert1] = 1;
+    for (int block=0; block<60; ++block)
+    {
+        buses.assign(kNT_lastBus*4,0);
+        fillBus(buses,1,1); fillBus(buses,2,2); fillBus(buses,7,10);
+        step(f.alg,buses.data(),1);
+        for (int n=0; n<4; ++n)
+        {
+            const float main = busSample(buses,13,n);
+            assert(main >= 9.999f && main <= 12.001f);
+        }
+    }
+    assertBus(buses,13,10);
+}
+
 void testOffsetLiveChanges()
 {
     OffsetFixture f(2);
@@ -210,6 +275,7 @@ void testOffsetLiveChanges()
 int main()
 {
     testOffsetEditorAndRestore(); testOffsetParameterLayouts(); testOffsetImpulseRouting();
-    testOffsetSidechainAlignment(); testOffsetLiveChanges();
+    testOffsetSidechainAlignment(); testSharedFinalInsertReturn();
+    testSharedReturnDuringInsertFade(); testOffsetLiveChanges();
     printf("PASS: offset editor, restore, 1..10-channel layouts, stereo impulses, inserts, FX, sidechain and live changes at %.0f Hz\n",double(NT_globals.sampleRate));
 }

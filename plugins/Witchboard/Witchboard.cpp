@@ -383,7 +383,7 @@ constexpr int kBypassDelayCapacity = 9601; // 100 ms at 96 kHz + current sample
 struct StereoDelay
 {
 	float* data;
-	int capacity, write, current, target, requested, fadePosition, fadeSamples;
+	int capacity, write, valid, current, target, requested, fadePosition, fadeSamples;
 	bool initialised;
 };
 
@@ -425,6 +425,7 @@ struct WitchboardAlgorithm : public _NT_algorithm
 	MasterFilterRuntime masterFilter;
 	StereoDelay mainDelay, bypassDelay, offsetKeyDelay;
 	StereoDelay* channelDelays;
+	StereoDelay* sharedReturnDelays;
 	int16_t channelOffsets[kMaxChannels]; // tenths of a millisecond
 	int offsetSelected, offsetDisplayed;
 	bool offsetInitialised, offsetRestorePending, offsetPublishing;
@@ -481,6 +482,8 @@ size_t requiredDram(int channels)
 	size = addStorage<_NT_parameter>(size, kNumGlobalParams + channels * kNumChannelParams + 2);
 	size = addStorage<StereoDelay>(size, channels);
 	size = addStorage<float>(size, 2 * kChannelDelayCapacity * (channels + 1));
+	size = addStorage<StereoDelay>(size, kNumRoutes);
+	size = addStorage<float>(size, 2 * kChannelDelayCapacity * kNumRoutes);
 	return size;
 }
 
@@ -536,6 +539,15 @@ WitchboardAlgorithm::WitchboardAlgorithm(int channels, uint8_t* dram)
 	for (int i = 0; i <= numChannels; ++i)
 	{
 		StereoDelay& delay = i < numChannels ? channelDelays[i] : offsetKeyDelay;
+		delay.capacity = kChannelDelayCapacity;
+		delay.data = takeStorage<float>(dram, 2 * kChannelDelayCapacity);
+		memset(delay.data, 0, sizeof(float) * 2 * kChannelDelayCapacity);
+	}
+	sharedReturnDelays = takeStorage<StereoDelay>(dram, kNumRoutes);
+	memset(sharedReturnDelays, 0, sizeof(StereoDelay) * kNumRoutes);
+	for (int route = 0; route < kNumRoutes; ++route)
+	{
+		StereoDelay& delay = sharedReturnDelays[route];
 		delay.capacity = kChannelDelayCapacity;
 		delay.data = takeStorage<float>(dram, 2 * kChannelDelayCapacity);
 		memset(delay.data, 0, sizeof(float) * 2 * kChannelDelayCapacity);
@@ -1000,6 +1012,42 @@ void processDelay(StereoDelay& delay, float& left, float& right)
 	if (++delay.write == delay.capacity) delay.write = 0;
 }
 
+// Shared routes may stop and restart. Keep their validity separate from the
+// established channel, key, Main and Bypass delay behavior.
+void processSharedReturnDelay(StereoDelay& delay, float& left, float& right)
+{
+	delay.data[2 * delay.write] = left;
+	delay.data[2 * delay.write + 1] = right;
+	if (delay.valid < delay.capacity) ++delay.valid;
+	if (delay.current == 0 && delay.target == 0 && delay.requested == 0
+		&& delay.fadePosition == 0)
+	{
+		if (++delay.write == delay.capacity) delay.write = 0;
+		return;
+	}
+	if (delay.fadePosition == 0 && delay.current != delay.requested
+		&& delay.valid > delay.requested)
+		delay.target = delay.requested;
+	int oldRead = delay.write - delay.current;
+	if (oldRead < 0) oldRead += delay.capacity;
+	left = delay.valid > delay.current ? delay.data[2 * oldRead] : 0.0f;
+	right = delay.valid > delay.current ? delay.data[2 * oldRead + 1] : 0.0f;
+	if (delay.current != delay.target)
+	{
+		int newRead = delay.write - delay.target;
+		if (newRead < 0) newRead += delay.capacity;
+		const float mix = static_cast<float>(++delay.fadePosition) / delay.fadeSamples;
+		left += mix * ((delay.valid > delay.target ? delay.data[2 * newRead] : 0.0f) - left);
+		right += mix * ((delay.valid > delay.target ? delay.data[2 * newRead + 1] : 0.0f) - right);
+		if (delay.fadePosition >= delay.fadeSamples)
+		{
+			delay.current = delay.target;
+			delay.fadePosition = 0;
+		}
+	}
+	if (++delay.write == delay.capacity) delay.write = 0;
+}
+
 int followBypassOffset(WitchboardAlgorithm* self)
 {
 	const int activeAuto = self->v[kParamSidechainMode]
@@ -1453,13 +1501,18 @@ inline void processPath(OutputPair* outputs,
 	const float* const* returnLeft, const float* const* returnRight,
 	const bool* returnStereo, int frame, float left, float right, bool stereo,
 	int route1, int route2, bool repeatProtection,
-	float pathGain, float channelGain, float& collectedLeft, float& collectedRight)
+	float pathGain, float channelGain, const uint8_t* routeUsers,
+	bool* sharedUsed, float& collectedLeft, float& collectedRight)
 {
 	if (pathGain <= 0.0f)
 		return;
 
 	left *= channelGain;
 	right *= channelGain;
+	if (repeatProtection && route1 >= 0 && route2 == route1)
+		route2 = -1;
+	const int finalRoute = route2 >= 0 ? route2 : route1;
+	const bool shared = finalRoute >= 0 && routeUsers[finalRoute] > 1;
 
 	float intermediateLeft = left;
 	float intermediateRight = right;
@@ -1467,13 +1520,15 @@ inline void processPath(OutputPair* outputs,
 	if (route1 >= 0)
 	{
 		addSignal(outputs[kRouteOutputBase + route1], frame, left, right, stereo, pathGain);
+		if (shared && route2 < 0)
+		{
+			sharedUsed[finalRoute] = true;
+			return;
+		}
 		intermediateLeft = returnLeft[route1] ? returnLeft[route1][frame] : 0.0f;
 		intermediateRight = returnRight[route1] ? returnRight[route1][frame] : intermediateLeft;
 		intermediateStereo = returnStereo[route1];
 	}
-	if (repeatProtection && route1 >= 0 && route2 == route1)
-		route2 = -1;
-
 	float finalLeft = intermediateLeft;
 	float finalRight = intermediateRight;
 	bool finalStereo = intermediateStereo;
@@ -1481,6 +1536,11 @@ inline void processPath(OutputPair* outputs,
 	{
 		addSignal(outputs[kRouteOutputBase + route2], frame, intermediateLeft, intermediateRight,
 			intermediateStereo, pathGain);
+		if (shared)
+		{
+			sharedUsed[finalRoute] = true;
+			return;
+		}
 		finalLeft = returnLeft[route2] ? returnLeft[route2][frame] : 0.0f;
 		finalRight = returnRight[route2] ? returnRight[route2][frame] : finalLeft;
 		finalStereo = returnStereo[route2];
@@ -1488,6 +1548,20 @@ inline void processPath(OutputPair* outputs,
 
 	collectedLeft += finalLeft * pathGain;
 	collectedRight += (finalStereo ? finalRight : finalLeft) * pathGain;
+}
+
+// Keep direct path tests and callers that have no shared route metadata simple.
+inline void processPath(OutputPair* outputs,
+	const float* const* returnLeft, const float* const* returnRight,
+	const bool* returnStereo, int frame, float left, float right, bool stereo,
+	int route1, int route2, bool repeatProtection,
+	float pathGain, float channelGain, float& collectedLeft, float& collectedRight)
+{
+	const uint8_t routeUsers[kNumRoutes] = {};
+	bool sharedUsed[kNumRoutes] = {};
+	processPath(outputs, returnLeft, returnRight, returnStereo, frame, left, right,
+		stereo, route1, route2, repeatProtection, pathGain, channelGain,
+		routeUsers, sharedUsed, collectedLeft, collectedRight);
 }
 
 inline void mixChannelSignal(OutputPair* outputs, int frame, int outputIndex,
@@ -1514,6 +1588,31 @@ struct ChannelBlockState
 	int8_t routes[kNumInserts][kNumInsertStates];
 	CrossfadeGains fxGains[kNumFx];
 };
+
+inline int finalInsertRoute(const ChannelBlockState& state, int first, int second,
+	bool repeatProtection)
+{
+	const int route1 = state.routes[0][first];
+	const int route2 = state.routes[1][second];
+	return route2 >= 0 && (!repeatProtection || route2 != route1) ? route2 : route1;
+}
+
+uint8_t channelFinalRouteMask(const ChannelBlockState& state, const ChannelRuntime& rt,
+	bool repeatProtection)
+{
+	uint8_t mask = 0;
+	for (int first = 0; first < kNumInsertStates; ++first)
+	{
+		if (first != rt.insertState[0] && rt.insertGain[0][first] <= 0.0f) continue;
+		for (int second = 0; second < kNumInsertStates; ++second)
+		{
+			if (second != rt.insertState[1] && rt.insertGain[1][second] <= 0.0f) continue;
+			const int route = finalInsertRoute(state, first, second, repeatProtection);
+			if (route >= 0) mask |= static_cast<uint8_t>(1u << route);
+		}
+	}
+	return mask;
+}
 
 int selectedRoute(const WitchboardAlgorithm* self, int channel, int insert, int state)
 {
@@ -1720,9 +1819,43 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 					selectedRoute(self, channel, insert, routeState));
 		}
 	}
+	uint8_t routeUsers[kNumRoutes] = {};
+	int sharedOffset[kNumRoutes] = {};
+	for (int channel = 0; channel < self->numChannels; ++channel)
+	{
+		if (!channelState[channel].enabled) continue;
+		const uint8_t mask = channelFinalRouteMask(channelState[channel],
+			self->runtime[channel], repeatProtection);
+		for (int route = 0; route < kNumRoutes; ++route)
+			if (mask & (1u << route))
+			{
+				++routeUsers[route];
+				if (self->channelOffsets[channel] < sharedOffset[route])
+					sharedOffset[route] = self->channelOffsets[channel];
+			}
+	}
+	bool anyShared = false;
+	for (int route = 0; route < kNumRoutes; ++route)
+	{
+		StereoDelay& delay = self->sharedReturnDelays[route];
+		if (routeUsers[route] > 1)
+		{
+			anyShared = true;
+			setDelay(delay, baseOffsetSamples
+				- millisecondsToSamples(-sharedOffset[route] * 0.1f, sampleRate), fadeDelaySamples);
+		}
+		else
+		{
+			delay.initialised = false;
+			delay.valid = delay.write = delay.current = delay.target = 0;
+			delay.requested = delay.fadePosition = 0;
+		}
+	}
 
 	for (int frame = 0; frame < numFrames; ++frame)
 	{
+		bool sharedUsed[kNumRoutes] = {};
+		float sharedRadiant[kNumRoutes] = {};
 		float mainLeft = 0.0f;
 		float mainRight = 0.0f;
 		float bypassLeft = 0.0f;
@@ -1758,6 +1891,7 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 				continue;
 			}
 			float channelLeft = 0, channelRight = 0;
+			bool channelSharedUsed[kNumRoutes] = {};
 
 			const float left = state.left[frame];
 			const float right = state.right ? state.right[frame] : left;
@@ -1768,7 +1902,8 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 					frame, left, right, state.stereo,
 					state.routes[0][rt.insertState[0]],
 					state.routes[1][rt.insertState[1]],
-					repeatProtection, 1.0f, rt.gain.value, channelLeft, channelRight);
+					repeatProtection, 1.0f, rt.gain.value, routeUsers,
+					channelSharedUsed, channelLeft, channelRight);
 			}
 			else
 			{
@@ -1783,13 +1918,38 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 							frame, left, right, state.stereo,
 							state.routes[0][insert1],
 							state.routes[1][insert2],
-							repeatProtection, gain, rt.gain.value, channelLeft, channelRight);
+							repeatProtection, gain, rt.gain.value, routeUsers,
+							channelSharedUsed, channelLeft, channelRight);
 					}
 				}
 			}
 			processDelay(self->channelDelays[channel], channelLeft, channelRight);
+			const int stableFinal = finalInsertRoute(state, rt.insertState[0],
+				rt.insertState[1], repeatProtection);
+			if (rt.insertSamplesRemaining[0] == 0 && rt.insertSamplesRemaining[1] == 0
+				&& stableFinal >= 0 && routeUsers[stableFinal] > 1)
+				channelLeft = channelRight = 0.0f;
 			mixChannelSignal(outputs, frame, state.outputIndex, channelLeft, channelRight, state.fxGains);
+			if (anyShared)
+				for (int route = 0; route < kNumRoutes; ++route)
+					if (channelSharedUsed[route])
+					{
+						sharedUsed[route] = true;
+						if (state.fxGains[0].wet > sharedRadiant[route])
+							sharedRadiant[route] = state.fxGains[0].wet;
+					}
 		}
+		if (anyShared)
+			for (int route = 0; route < kNumRoutes; ++route)
+			{
+				if (!sharedUsed[route]) continue;
+				float left = returnLeft[route] ? returnLeft[route][frame] : 0.0f;
+				float right = returnRight[route] ? returnRight[route][frame] : left;
+				processSharedReturnDelay(self->sharedReturnDelays[route], left, right);
+				mainLeft += left;
+				mainRight += returnStereo[route] ? right : left;
+				addSignal(outputs[2], frame, left, right, returnStereo[route], sharedRadiant[route]);
+			}
 
 		advanceSmooth(self->masterGain);
 		const float finalGain = self->masterGain.value;
