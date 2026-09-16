@@ -19,9 +19,7 @@
 > **Firmware requirement: disting NT v1.18 or later.**
 
 > **Preset warning:** v1.0.3 changes the parameter layout. Do not load presets
-> saved with earlier WitchboardX versions directly. Convert supported
-> eight-route/two-send presets first; earlier public-release layouts are not
-> supported by the converter. Back up presets before converting.
+> saved with earlier WitchboardX versions directly. 
 
 Witchboard is a routing mixer and serial patchbay plug-in for the Expert Sleepers
 disting NT.
