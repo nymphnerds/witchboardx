@@ -29,11 +29,12 @@ struct TimingFixture
         v[channelBase(1)+kChannelInputL] = 2;
     }
     ~TimingFixture() { freeMemory(memory); }
-    float sample(float inserted, float dry, float returned)
+    float sample(float inserted, float dry, float returned, float key = 0.0f)
     {
         std::vector<float> buses(kNT_lastBus * 4, 0.0f);
         busSample(buses,1,0) = inserted;
         busSample(buses,2,0) = dry;
+        fillBus(buses,3,key);
         busSample(buses,returnBus,0) = returned;
         step(alg,buses.data(),1);
         return busSample(buses,mainBus,0);
@@ -113,10 +114,33 @@ void testBypassInsertTiming()
     assertClose(f.sample(0,0,10),12.0f);
 }
 
+void testSidechainKeyFollowsInsertTiming()
+{
+    TimingFixture f;
+    f.v[kParamSidechainMode] = 1;
+    f.v[kParamSidechainKeyInput] = 3;
+    f.v[kParamSidechainLookahead] = 0;
+    f.v[f.alg->insertLatencyParam()] = 10;
+    parameterChanged(f.alg, f.alg->insertLatencyParam());
+    const int latencyBlocks = millisecondsToSamples(1.0f, NT_globals.sampleRate) / 4;
+    const int warm = (millisecondsToSamples(6.0f, NT_globals.sampleRate) + 8) / 4;
+    for (int i = 0; i < warm; ++i) f.sample(0,0,0);
+    f.sample(0,0,0,1.0f);
+    assert(!f.alg->sidechain.keyHigh);
+    for (int i = 1; i < latencyBlocks; ++i)
+    {
+        f.sample(0,0,0);
+        assert(!f.alg->sidechain.keyHigh);
+    }
+    f.sample(0,0,0);
+    assert(f.alg->sidechain.keyHigh);
+}
+
 int main()
 {
     testRouteEditorAndPreset();
     testSingleAndSharedInsertTiming();
     testBypassInsertTiming();
-    printf("PASS: insert route editor, preset migration, single and shared return timing at %d Hz\n", NT_globals.sampleRate);
+    testSidechainKeyFollowsInsertTiming();
+    printf("PASS: insert route editor, preset migration, single/shared returns, Bypass and SC key timing at %d Hz\n", NT_globals.sampleRate);
 }

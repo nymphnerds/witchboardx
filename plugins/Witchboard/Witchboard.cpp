@@ -423,7 +423,7 @@ struct WitchboardAlgorithm : public _NT_algorithm
 	SendState* sends;
 	SidechainRuntime sidechain;
 	MasterFilterRuntime masterFilter;
-	StereoDelay mainDelay, bypassDelay, insertDryDelay, insertBypassDryDelay, insertKeyDelay;
+	StereoDelay mainDelay, bypassDelay, insertDryDelay;
 	StereoDelay* insertReturnDelays;
 	int16_t insertLatencies[kNumRoutes]; // tenths of a millisecond
 	int insertSelected, insertDisplayed;
@@ -479,7 +479,8 @@ size_t requiredDram(int channels)
 	size = addStorage<SendState>(size, channels);
 	size = addStorage<float>(size, 2 * (kMainDelayCapacity + kBypassDelayCapacity));
 	size = addStorage<_NT_parameter>(size, kNumGlobalParams + channels * kNumChannelParams + 2);
-	size = addStorage<float>(size, 2 * kInsertDelayCapacity * 3);
+	// Main L/R, Bypass L/R, and mono SC key share one delay position.
+	size = addStorage<float>(size, 5 * kInsertDelayCapacity);
 	size = addStorage<StereoDelay>(size, kNumRoutes);
 	size = addStorage<float>(size, 2 * kInsertDelayCapacity * kNumRoutes);
 	return size;
@@ -531,16 +532,9 @@ WitchboardAlgorithm::WitchboardAlgorithm(int channels, uint8_t* dram)
 	instanceParameters[insertLatencyParam()] = parameterDefs[kMaxParams - 1];
 	parameters = instanceParameters;
 	memset(&insertDryDelay, 0, sizeof(insertDryDelay));
-	memset(&insertBypassDryDelay, 0, sizeof(insertBypassDryDelay));
-	memset(&insertKeyDelay, 0, sizeof(insertKeyDelay));
-	for (int i = 0; i < 3; ++i)
-	{
-		StereoDelay& delay = i == 0 ? insertDryDelay
-			: (i == 1 ? insertBypassDryDelay : insertKeyDelay);
-		delay.capacity = kInsertDelayCapacity;
-		delay.data = takeStorage<float>(dram, 2 * kInsertDelayCapacity);
-		memset(delay.data, 0, sizeof(float) * 2 * kInsertDelayCapacity);
-	}
+	insertDryDelay.capacity = kInsertDelayCapacity;
+	insertDryDelay.data = takeStorage<float>(dram, 5 * kInsertDelayCapacity);
+	memset(insertDryDelay.data, 0, sizeof(float) * 5 * kInsertDelayCapacity);
 	insertReturnDelays = takeStorage<StereoDelay>(dram, kNumRoutes);
 	memset(insertReturnDelays, 0, sizeof(StereoDelay) * kNumRoutes);
 	for (int route = 0; route < kNumRoutes; ++route)
@@ -1047,6 +1041,55 @@ void processSharedReturnDelay(StereoDelay& delay, float& left, float& right)
 			delay.current = delay.target;
 			delay.fadePosition = 0;
 		}
+	}
+	if (++delay.write == delay.capacity) delay.write = 0;
+}
+
+// The five signals share one insertion delay, so use one ring position and
+// one tap transition instead of three independent stereo delay operations.
+void processInsertDryDelay(StereoDelay& delay, float& mainLeft, float& mainRight,
+	float& bypassLeft, float& bypassRight, float& key)
+{
+	float* write = delay.data + 5 * delay.write;
+	write[0] = mainLeft;
+	write[1] = mainRight;
+	write[2] = bypassLeft;
+	write[3] = bypassRight;
+	write[4] = key;
+	if (delay.valid < delay.capacity) ++delay.valid;
+	if (delay.fadePosition == 0 && delay.current != delay.requested
+		&& delay.valid > delay.requested)
+		delay.target = delay.requested;
+	int oldRead = delay.write - delay.current;
+	if (oldRead < 0) oldRead += delay.capacity;
+	const float* old = delay.data + 5 * oldRead;
+	if (delay.current != delay.target)
+	{
+		int newRead = delay.write - delay.target;
+		if (newRead < 0) newRead += delay.capacity;
+		const float* next = delay.data + 5 * newRead;
+		const float mix = static_cast<float>(++delay.fadePosition) / delay.fadeSamples;
+		const bool oldValid = delay.valid > delay.current;
+		const bool nextValid = delay.valid > delay.target;
+		mainLeft = (oldValid ? old[0] : 0.0f) * (1.0f - mix) + (nextValid ? next[0] : 0.0f) * mix;
+		mainRight = (oldValid ? old[1] : 0.0f) * (1.0f - mix) + (nextValid ? next[1] : 0.0f) * mix;
+		bypassLeft = (oldValid ? old[2] : 0.0f) * (1.0f - mix) + (nextValid ? next[2] : 0.0f) * mix;
+		bypassRight = (oldValid ? old[3] : 0.0f) * (1.0f - mix) + (nextValid ? next[3] : 0.0f) * mix;
+		key = (oldValid ? old[4] : 0.0f) * (1.0f - mix) + (nextValid ? next[4] : 0.0f) * mix;
+		if (delay.fadePosition >= delay.fadeSamples)
+		{
+			delay.current = delay.target;
+			delay.fadePosition = 0;
+		}
+	}
+	else
+	{
+		const bool valid = delay.valid > delay.current;
+		mainLeft = valid ? old[0] : 0.0f;
+		mainRight = valid ? old[1] : 0.0f;
+		bypassLeft = valid ? old[2] : 0.0f;
+		bypassRight = valid ? old[3] : 0.0f;
+		key = valid ? old[4] : 0.0f;
 	}
 	if (++delay.write == delay.capacity) delay.write = 0;
 }
@@ -1887,19 +1930,6 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 		setPrimedDelay(self->insertDryDelay, maxInsertSamples, fadeDelaySamples);
 	else
 		self->insertDryDelay.initialised = false;
-	if (maxInsertSamples > 0 || self->insertBypassDryDelay.current != 0
-		|| self->insertBypassDryDelay.fadePosition != 0)
-		setPrimedDelay(self->insertBypassDryDelay, maxInsertSamples, fadeDelaySamples);
-	else
-		self->insertBypassDryDelay.initialised = false;
-	if (sidechainEnabled)
-	{
-		if (maxInsertSamples > 0 || self->insertKeyDelay.current != 0
-			|| self->insertKeyDelay.fadePosition != 0)
-			setPrimedDelay(self->insertKeyDelay, maxInsertSamples, fadeDelaySamples);
-	}
-	else
-		self->insertKeyDelay.initialised = false;
 	for (int route = 0; route < kNumRoutes; ++route)
 		if (deferredRoutes[route])
 		{
@@ -2019,10 +2049,10 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 								sharedSend[route][fx] = state.fxGains[fx].wet;
 					}
 		}
+		float keyMagnitude = sidechainKey ? sidechainKey[frame] : 0.0f;
 		if (self->insertDryDelay.initialised)
-			processSharedReturnDelay(self->insertDryDelay, mainLeft, mainRight);
-		if (self->insertBypassDryDelay.initialised)
-			processSharedReturnDelay(self->insertBypassDryDelay, bypassLeft, bypassRight);
+			processInsertDryDelay(self->insertDryDelay, mainLeft, mainRight,
+				bypassLeft, bypassRight, keyMagnitude);
 		if (anyDeferred)
 			for (int route = 0; route < kNumRoutes; ++route)
 			{
@@ -2049,10 +2079,6 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 		advanceSmooth(self->masterGain);
 		const float finalGain = self->masterGain.value;
 
-		float keyMagnitude = sidechainKey ? sidechainKey[frame] : 0.0f;
-		float keyRight = keyMagnitude;
-		if (self->insertKeyDelay.initialised)
-			processSharedReturnDelay(self->insertKeyDelay, keyMagnitude, keyRight);
 		const float sidechainGain = sidechainEnabled
 			? processSidechain(self->sidechain, keyMagnitude, envSamples, beta, smoothSamples, depth) : 1.0f;
 		processDelay(self->mainDelay, mainLeft, mainRight);
