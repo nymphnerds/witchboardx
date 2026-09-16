@@ -7,7 +7,7 @@
 - User-reported disting NT setup: 44.1 kHz, Poly Res enabled, ten-channel WitchboardX preset, one stereo iPad insert on Drums ST / route E. The saved preset currently has an 18.2 ms (`182` tenths) return offset on route E.
 - CPU reading: **23% with the insert return offset at 0 ms; 28% with it at 18.2 ms**. This is the latest hardware reading, for the object built from `cdab0dd`.
 - Normal object filename: `plugins/WitchboardX.o`, SHA-256 `74eb037ea5c5134a2c9b9f8ebe6594f272631997b83e790c4cbbecc1270dfc5e`. An identical copy is in the existing `build/WitchboardX-cdab0dd-measured-23-28.o` file. The binary is ignored by Git; the source commit is the durable reference.
-- The user has **not yet reported a long-duration, cutout-free run** of this candidate. Earlier branch objects eventually cut out, especially with Poly Res enabled. Do not call this fixed on CPU readings alone.
+- The user subsequently confirmed that this candidate **runs without cutouts with Poly Res enabled** at the tested insert offset. The exact run duration was not supplied. Earlier branch objects eventually cut out; preserve this working object for comparison before trying another CPU change.
 - `make verify` passed: host routing, gain, four-send, sidechain, timing, preset migration tests at 32/44.1/48/96 kHz, plus ARM object inspection. Host tests do not establish NT stability.
 
 ## Architecture and controls to preserve
@@ -41,7 +41,7 @@ Host preset-shaped 24-frame timing improved from about 1.90 to 1.66 microseconds
 
 ## Next session
 
-1. First confirm whether `cdab0dd` can run at 18.2 ms with Poly Res for longer than the previous cutout interval. Keep the measured object available as an A/B reference.
+1. Treat `cdab0dd` as the user-confirmed cutout-free, 23%/28% reference. Keep its measured object available for A/B tests; the duration of the successful run is unspecified.
 2. If stable, isolate the remaining active-path cost with one controlled change at a time. Compare route collection against the five-signal DRAM delay ring while holding the same preset, sample rate, and Poly Res state. Preserve signal alignment and live fade behavior; avoid another broad latency rewrite.
 3. Measure 0 and 18.2 ms after each candidate. Reject any candidate that raises the 23% idle baseline or causes earlier cutouts.
 4. Hardware-validate two channels sharing one insert return, highest active route offset, SC Lookahead, Bypass Offset, live offset changes, and send FX levels independently. Host tests cover these paths but are not a substitute for sustained NT playback.
