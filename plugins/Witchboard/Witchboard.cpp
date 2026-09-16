@@ -1618,6 +1618,8 @@ struct ChannelBlockState
 	int outputIndex;
 	int8_t routes[kNumInserts][kNumInsertStates];
 	CrossfadeGains fxGains[kNumFx];
+	uint8_t finalRouteMask;
+	bool deferred;
 };
 
 inline int finalInsertRoute(const ChannelBlockState& state, int first, int second,
@@ -1844,9 +1846,13 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 	uint8_t routeUsers[kNumRoutes] = {};
 	for (int channel = 0; channel < self->numChannels; ++channel)
 	{
-		if (!channelState[channel].enabled) continue;
-		const uint8_t mask = channelFinalRouteMask(channelState[channel],
+		ChannelBlockState& state = channelState[channel];
+		state.finalRouteMask = 0;
+		state.deferred = false;
+		if (!state.enabled) continue;
+		const uint8_t mask = channelFinalRouteMask(state,
 			self->runtime[channel], repeatProtection);
+		state.finalRouteMask = mask;
 		for (int route = 0; route < kNumRoutes; ++route)
 			if (mask & (1u << route))
 				++routeUsers[route];
@@ -1870,6 +1876,11 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 			delay.requested = delay.fadePosition = 0;
 		}
 	}
+	uint8_t deferredMask = 0;
+	for (int route = 0; route < kNumRoutes; ++route)
+		if (deferredRoutes[route]) deferredMask |= static_cast<uint8_t>(1u << route);
+	for (int channel = 0; channel < self->numChannels; ++channel)
+		channelState[channel].deferred = (channelState[channel].finalRouteMask & deferredMask) != 0;
 	const int maxInsertSamples = millisecondsToSamples(maxInsertLatency * 0.1f, sampleRate);
 	if (maxInsertSamples > 0 || self->insertDryDelay.current != 0
 		|| self->insertDryDelay.fadePosition != 0)
@@ -1946,7 +1957,7 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 
 			if (rt.insertSamplesRemaining[0] == 0 && rt.insertSamplesRemaining[1] == 0)
 			{
-				if (anyDeferred)
+				if (state.deferred)
 					processPath(outputs, returnLeft, returnRight, returnStereo,
 						frame, left, right, state.stereo,
 						state.routes[0][rt.insertState[0]],
@@ -1970,7 +1981,7 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 					for (int insert2 = 0; insert2 < kNumInsertStates; ++insert2)
 					{
 						const float gain = rt.insertGain[0][insert1] * rt.insertGain[1][insert2];
-						if (anyDeferred)
+						if (state.deferred)
 							processPath(outputs, returnLeft, returnRight, returnStereo,
 								frame, left, right, state.stereo,
 								state.routes[0][insert1],
@@ -1987,7 +1998,7 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 					}
 				}
 			}
-			if (anyDeferred)
+			if (state.deferred)
 			{
 				const int stableFinal = finalInsertRoute(state, rt.insertState[0],
 					rt.insertState[1], repeatProtection);
@@ -1996,7 +2007,7 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 					channelLeft = channelRight = 0.0f;
 			}
 			mixChannelSignal(outputs, frame, state.outputIndex, channelLeft, channelRight, state.fxGains);
-			if (anyDeferred)
+			if (state.deferred)
 				for (int route = 0; route < kNumRoutes; ++route)
 					if (channelSharedUsed[route])
 					{
