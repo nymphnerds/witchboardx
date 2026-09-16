@@ -1076,6 +1076,20 @@ void processInsertDryDelay(StereoDelay& delay, float& mainLeft, float& mainRight
 	write[3] = bypassRight;
 	write[4] = key;
 	if (delay.valid < delay.capacity) ++delay.valid;
+	if (delay.fadePosition == 0 && delay.current == delay.target
+		&& delay.current == delay.requested && delay.valid > delay.current)
+	{
+		int read = delay.write - delay.current;
+		if (read < 0) read += delay.capacity;
+		const float* settled = delay.data + 5 * read;
+		mainLeft = settled[0];
+		mainRight = settled[1];
+		bypassLeft = settled[2];
+		bypassRight = settled[3];
+		key = settled[4];
+		if (++delay.write == delay.capacity) delay.write = 0;
+		return;
+	}
 	if (delay.fadePosition == 0 && delay.current != delay.requested
 		&& delay.valid > delay.requested)
 		delay.target = delay.requested;
@@ -1567,7 +1581,7 @@ inline void processPath(OutputPair* outputs,
 	const bool* returnStereo, int frame, float left, float right, bool stereo,
 	int route1, int route2, bool repeatProtection,
 	float pathGain, float channelGain, const bool* deferredRoutes,
-	bool* sharedUsed, float& collectedLeft, float& collectedRight)
+	uint8_t& sharedUsedMask, float& collectedLeft, float& collectedRight)
 {
 	if (pathGain <= 0.0f)
 		return;
@@ -1587,7 +1601,7 @@ inline void processPath(OutputPair* outputs,
 		addSignal(outputs[kRouteOutputBase + route1], frame, left, right, stereo, pathGain);
 		if (shared && route2 < 0)
 		{
-			sharedUsed[finalRoute] = true;
+			sharedUsedMask |= static_cast<uint8_t>(1u << finalRoute);
 			return;
 		}
 		intermediateLeft = returnLeft[route1] ? returnLeft[route1][frame] : 0.0f;
@@ -1603,7 +1617,7 @@ inline void processPath(OutputPair* outputs,
 			intermediateStereo, pathGain);
 		if (shared)
 		{
-			sharedUsed[finalRoute] = true;
+			sharedUsedMask |= static_cast<uint8_t>(1u << finalRoute);
 			return;
 		}
 		finalLeft = returnLeft[route2] ? returnLeft[route2][frame] : 0.0f;
@@ -1962,6 +1976,33 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 		if (deferredRoutes[route]) deferredMask |= static_cast<uint8_t>(1u << route);
 	for (int channel = 0; channel < self->numChannels; ++channel)
 		channelState[channel].deferred = (channelState[channel].finalRouteMask & deferredMask) != 0;
+	bool steadySharedMix = anyDeferred;
+	for (int channel = 0; channel < self->numChannels; ++channel)
+		if (channelState[channel].deferred && channelState[channel].moving)
+			steadySharedMix = false;
+	uint8_t steadySharedMask = 0;
+	float steadySharedSend[kNumRoutes][kNumFx] = {};
+	int steadySharedOutput[kNumRoutes] = {};
+	if (steadySharedMix)
+		for (int channel = 0; channel < self->numChannels; ++channel)
+		{
+			const ChannelBlockState& state = channelState[channel];
+			uint8_t routes = state.finalRouteMask & deferredMask;
+			while (routes)
+			{
+				const int route = __builtin_ctz(static_cast<unsigned>(routes));
+				routes &= static_cast<uint8_t>(routes - 1);
+				steadySharedMask |= static_cast<uint8_t>(1u << route);
+				if (routeUsers[route] == 1)
+					steadySharedOutput[route] = state.outputIndex;
+				for (int index = 0; index < state.activeFxCount; ++index)
+				{
+					const int fx = state.activeFx[index];
+					if (state.fxGains[fx].wet > steadySharedSend[route][fx])
+						steadySharedSend[route][fx] = state.fxGains[fx].wet;
+				}
+			}
+		}
 	const int activeCapacity = activeInsertDelayCapacity();
 	updateInsertDelayCapacity(self->insertDryDelay, activeCapacity);
 	for (int route = 0; route < kNumRoutes; ++route)
@@ -1988,14 +2029,15 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 
 	for (int frame = 0; frame < numFrames; ++frame)
 	{
-		bool sharedUsed[kNumRoutes];
-		float sharedSend[kNumRoutes][kNumFx];
-		int sharedOutput[kNumRoutes];
-		if (anyDeferred)
+		uint8_t sharedUsedMask = steadySharedMix ? steadySharedMask : 0;
+		float dynamicSharedSend[kNumRoutes][kNumFx];
+		int dynamicSharedOutput[kNumRoutes];
+		float (*sharedSend)[kNumFx] = steadySharedMix ? steadySharedSend : dynamicSharedSend;
+		int* sharedOutput = steadySharedMix ? steadySharedOutput : dynamicSharedOutput;
+		if (anyDeferred && !steadySharedMix)
 		{
-			memset(sharedUsed, 0, sizeof(sharedUsed));
-			memset(sharedSend, 0, sizeof(sharedSend));
-			memset(sharedOutput, 0, sizeof(sharedOutput));
+			memset(dynamicSharedSend, 0, sizeof(dynamicSharedSend));
+			memset(dynamicSharedOutput, 0, sizeof(dynamicSharedOutput));
 		}
 		float mainLeft = 0.0f;
 		float mainRight = 0.0f;
@@ -2030,9 +2072,7 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 			if (!state.enabled)
 				continue;
 			float channelLeft = 0, channelRight = 0;
-			bool channelSharedUsed[kNumRoutes];
-			if (state.deferred)
-				memset(channelSharedUsed, 0, sizeof(channelSharedUsed));
+			uint8_t channelSharedMask = 0;
 
 			const float left = state.left[frame];
 			const float right = state.right ? state.right[frame] : left;
@@ -2045,7 +2085,7 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 						state.routes[0][rt.insertState[0]],
 						state.routes[1][rt.insertState[1]],
 						repeatProtection, 1.0f, rt.gain.value, deferredRoutes,
-						channelSharedUsed, channelLeft, channelRight);
+						channelSharedMask, channelLeft, channelRight);
 				else
 					processPath(outputs, returnLeft, returnRight, returnStereo,
 						frame, left, right, state.stereo,
@@ -2069,7 +2109,7 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 								state.routes[0][insert1],
 								state.routes[1][insert2],
 								repeatProtection, gain, rt.gain.value, deferredRoutes,
-								channelSharedUsed, channelLeft, channelRight);
+								channelSharedMask, channelLeft, channelRight);
 						else
 							processPath(outputs, returnLeft, returnRight, returnStereo,
 								frame, left, right, state.stereo,
@@ -2088,31 +2128,34 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 					&& stableFinal >= 0 && deferredRoutes[stableFinal])
 					channelLeft = channelRight = 0.0f;
 			}
-			mixChannelSignal(outputs, frame, state.outputIndex, channelLeft, channelRight,
-				state.fxGains, state.activeFx, state.activeFxCount);
-			if (state.deferred)
-				for (int route = 0; route < kNumRoutes; ++route)
-					if (channelSharedUsed[route])
+			if (channelLeft != 0.0f || channelRight != 0.0f)
+				mixChannelSignal(outputs, frame, state.outputIndex, channelLeft, channelRight,
+					state.fxGains, state.activeFx, state.activeFxCount);
+			if (state.deferred && !steadySharedMix)
+				while (channelSharedMask)
+				{
+					const int route = __builtin_ctz(static_cast<unsigned>(channelSharedMask));
+					channelSharedMask &= static_cast<uint8_t>(channelSharedMask - 1);
+					sharedUsedMask |= static_cast<uint8_t>(1u << route);
+					if (routeUsers[route] == 1)
+						sharedOutput[route] = state.outputIndex;
+					for (int index = 0; index < state.activeFxCount; ++index)
 					{
-						sharedUsed[route] = true;
-						if (routeUsers[route] == 1)
-							sharedOutput[route] = state.outputIndex;
-						for (int index = 0; index < state.activeFxCount; ++index)
-						{
-							const int fx = state.activeFx[index];
-							if (state.fxGains[fx].wet > sharedSend[route][fx])
-								sharedSend[route][fx] = state.fxGains[fx].wet;
-						}
+						const int fx = state.activeFx[index];
+						if (state.fxGains[fx].wet > sharedSend[route][fx])
+							sharedSend[route][fx] = state.fxGains[fx].wet;
 					}
+				}
 		}
 		float keyMagnitude = sidechainKey ? sidechainKey[frame] : 0.0f;
 		if (self->insertDryDelay.initialised)
 			processInsertDryDelay(self->insertDryDelay, mainLeft, mainRight,
 				bypassLeft, bypassRight, keyMagnitude);
 		if (anyDeferred)
-			for (int route = 0; route < kNumRoutes; ++route)
+			while (sharedUsedMask)
 			{
-				if (!sharedUsed[route]) continue;
+				const int route = __builtin_ctz(static_cast<unsigned>(sharedUsedMask));
+				sharedUsedMask &= static_cast<uint8_t>(sharedUsedMask - 1);
 				float left = returnLeft[route] ? returnLeft[route][frame] : 0.0f;
 				float right = returnRight[route] ? returnRight[route][frame] : left;
 				if (self->insertReturnDelays[route].initialised)
