@@ -136,11 +136,29 @@ void testSidechainKeyFollowsInsertTiming()
     assert(f.alg->sidechain.keyHigh);
 }
 
+void testLateSendOnDeferredInsertReturn()
+{
+    TimingFixture f;
+    const int fx4Output = TimingFixture::sendBus + 2;
+    f.v[fxParam(3, 0)] = fx4Output;
+    f.v[channelBase(0) + kChannelSendSelect] = 3;
+    f.v[channelBase(0) + kChannelSendAmount] = 25;
+    f.v[f.alg->insertLatencyParam()] = 10;
+    parameterChanged(f.alg, f.alg->insertLatencyParam());
+    for (int i = 0; i < (millisecondsToSamples(6.0f, NT_globals.sampleRate) + 8) / 4; ++i)
+        f.sample(0, 0, 0);
+    std::vector<float> buses(kNT_lastBus * 4, 0.0f);
+    busSample(buses, TimingFixture::returnBus, 0) = 10.0f;
+    step(f.alg, buses.data(), 1);
+    assertClose(busSample(buses, fx4Output, 0), 5.0f);
+}
+
 int main()
 {
     testRouteEditorAndPreset();
     testSingleAndSharedInsertTiming();
     testBypassInsertTiming();
     testSidechainKeyFollowsInsertTiming();
+    testLateSendOnDeferredInsertReturn();
     printf("PASS: insert route editor, preset migration, single/shared returns, Bypass and SC key timing at %d Hz\n", NT_globals.sampleRate);
 }

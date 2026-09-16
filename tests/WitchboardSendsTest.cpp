@@ -147,6 +147,41 @@ void testFourSendAudio()
     assertBus(buses,15,2); assertBus(buses,16,2);
 }
 
+void testInactiveSendBecomesActiveDuringFade()
+{
+    SendFixture f;
+    f.values[kParamFadeMs] = 1;
+    f.values[kParamMainL] = 13;
+    f.values[fxParam(3, 0)] = 17;
+    f.values[channelBase(9) + kChannelInputL] = 1;
+    f.select(9, 3);
+    f.amount(9, 0);
+    std::vector<float> buses(kNT_lastBus * 4, 0.0f);
+    fillBus(buses, 1, 1.0f);
+    step(f.alg, buses.data(), 1);
+    f.amount(9, 100);
+    std::fill(buses.begin(), buses.end(), 0.0f);
+    fillBus(buses, 1, 1.0f);
+    step(f.alg, buses.data(), 1);
+    assert(busSample(buses, 17, 0) > 0.0f);
+    for (int i = 0; i < 30; ++i)
+    {
+        std::fill(buses.begin(), buses.end(), 0.0f);
+        fillBus(buses, 1, 1.0f);
+        step(f.alg, buses.data(), 1);
+    }
+    assertBus(buses, 17, 1.0f);
+    f.amount(9, 0);
+    for (int i = 0; i < 30; ++i)
+    {
+        std::fill(buses.begin(), buses.end(), 0.0f);
+        fillBus(buses, 1, 1.0f);
+        step(f.alg, buses.data(), 1);
+    }
+    assertBus(buses, 17, 0.0f);
+    assertBus(buses, 13, 1.0f);
+}
+
 void testSendSaveLoadAndPages()
 {
     SendFixture source;
@@ -188,6 +223,7 @@ void testSendSaveLoadAndPages()
 
 int main()
 {
-    testFourStateSendSelector(); testSendEditorAndMidi(); testFourSendAudio(); testSendSaveLoadAndPages();
+	testFourStateSendSelector(); testSendEditorAndMidi(); testFourSendAudio();
+	testInactiveSendBecomesActiveDuringFade(); testSendSaveLoadAndPages();
     printf("PASS: four simultaneous sends/returns, editor, independent/shared CCs, pickup, save/load, unique pages at %.0f Hz\n",double(NT_globals.sampleRate));
 }

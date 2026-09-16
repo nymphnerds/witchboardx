@@ -1658,11 +1658,13 @@ inline void processPath(OutputPair* outputs,
 }
 
 inline void mixChannelSignal(OutputPair* outputs, int frame, int outputIndex,
-	float left, float right, const CrossfadeGains* fxGains)
+	float left, float right, const CrossfadeGains* fxGains,
+	const uint8_t* activeFx, int activeFxCount)
 {
 	float dryMix = 1.0f;
-	for (int fx = 0; fx < kNumFx; ++fx)
+	for (int index = 0; index < activeFxCount; ++index)
 	{
+		const int fx = activeFx[index];
 		dryMix *= fxGains[fx].dry;
 		addSignal(outputs[2 + fx], frame, left, right, true, fxGains[fx].wet);
 	}
@@ -1680,6 +1682,8 @@ struct ChannelBlockState
 	int outputIndex;
 	int8_t routes[kNumInserts][kNumInsertStates];
 	CrossfadeGains fxGains[kNumFx];
+	uint8_t activeFx[kNumFx];
+	uint8_t activeFxCount;
 	uint8_t finalRouteMask;
 	bool deferred;
 };
@@ -1857,6 +1861,8 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 	const float* fxRight[kNumFx];
 	bool fxStereo[kNumFx];
 	int fxOutput[kNumFx];
+	uint8_t activeFxReturns[kNumFx];
+	int activeFxReturnCount = 0;
 	for (int fx = 0; fx < kNumFx; ++fx)
 	{
 		fxLeft[fx] = inputBus(busFrames, self->v[fxParam(fx, 3)], numFrames);
@@ -1864,6 +1870,8 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 			? inputBus(busFrames, self->v[fxParam(fx, 4)], numFrames) : NULL;
 		fxStereo[fx] = fxRight[fx] != NULL;
 		fxOutput[fx] = self->v[fxParam(fx, 6)] == kOutputPathBypass ? 1 : 0;
+		if (fxLeft[fx])
+			activeFxReturns[activeFxReturnCount++] = static_cast<uint8_t>(fx);
 	}
 
 	syncInsertLatencyEditor(self);
@@ -1902,8 +1910,13 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 					beginSmooth(rt.fxMix[fx], levels[fx], percentGain(levels[fx]), fadeSamples);
 		}
 		state.moving = channelMoving(rt);
+		state.activeFxCount = 0;
 		for (int fx = 0; fx < kNumFx; ++fx)
-			state.fxGains[fx] = shapedCrossfade(rt.fxMix[fx].value);
+			if (rt.fxMix[fx].value > 0.0f || rt.fxMix[fx].samplesRemaining > 0)
+			{
+				state.fxGains[fx] = shapedCrossfade(rt.fxMix[fx].value);
+				state.activeFx[state.activeFxCount++] = static_cast<uint8_t>(fx);
+			}
 		for (int insert = 0; insert < kNumInserts; ++insert)
 		{
 			for (int routeState = 0; routeState < kNumInsertStates; ++routeState)
@@ -1992,10 +2005,9 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 		outputs[0] = { &mainLeft, &mainRight, true };
 		outputs[1] = { &bypassLeft, &bypassRight, true };
 
-		for (int fx = 0; fx < kNumFx; ++fx)
+		for (int index = 0; index < activeFxReturnCount; ++index)
 		{
-			if (!fxLeft[fx])
-				continue;
+			const int fx = activeFxReturns[index];
 			const float left = fxLeft[fx][frame];
 			const float right = fxRight[fx] ? fxRight[fx][frame] : left;
 			addSignal(outputs[fxOutput[fx]], frame, left, right, fxStereo[fx], 1.0f);
@@ -2008,8 +2020,11 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 			if (state.moving)
 			{
 				advanceChannel(rt);
-				for (int fx = 0; fx < kNumFx; ++fx)
+				for (int index = 0; index < state.activeFxCount; ++index)
+				{
+					const int fx = state.activeFx[index];
 					state.fxGains[fx] = shapedCrossfade(rt.fxMix[fx].value);
+				}
 				state.moving = channelMoving(rt);
 			}
 			if (!state.enabled)
@@ -2073,7 +2088,8 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 					&& stableFinal >= 0 && deferredRoutes[stableFinal])
 					channelLeft = channelRight = 0.0f;
 			}
-			mixChannelSignal(outputs, frame, state.outputIndex, channelLeft, channelRight, state.fxGains);
+			mixChannelSignal(outputs, frame, state.outputIndex, channelLeft, channelRight,
+				state.fxGains, state.activeFx, state.activeFxCount);
 			if (state.deferred)
 				for (int route = 0; route < kNumRoutes; ++route)
 					if (channelSharedUsed[route])
@@ -2081,9 +2097,12 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 						sharedUsed[route] = true;
 						if (routeUsers[route] == 1)
 							sharedOutput[route] = state.outputIndex;
-						for (int fx = 0; fx < kNumFx; ++fx)
+						for (int index = 0; index < state.activeFxCount; ++index)
+						{
+							const int fx = state.activeFx[index];
 							if (state.fxGains[fx].wet > sharedSend[route][fx])
 								sharedSend[route][fx] = state.fxGains[fx].wet;
+						}
 					}
 		}
 		float keyMagnitude = sidechainKey ? sidechainKey[frame] : 0.0f;

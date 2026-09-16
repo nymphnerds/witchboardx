@@ -114,7 +114,8 @@ void assertCrossfadeRouting(float fx1Mix, float fx2Mix,
 	float left = 0, right = 0;
 	processPath(outputs, returnLeft, returnRight, returnStereo,
 		0, 1.0f, 1.0f, false, -1, -1, true, 1.0f, 1.0f, left, right);
-	mixChannelSignal(outputs, 0, 0, left, right, fxGains);
+	const uint8_t activeFx[] = { 0, 1, 2, 3 };
+	mixChannelSignal(outputs, 0, 0, left, right, fxGains, activeFx, kNumFx);
 	assertClose(dry[0], expectedDry);
 	assertClose(wet1[0], expectedFx1);
 	assertClose(wet2[0], expectedFx2);
