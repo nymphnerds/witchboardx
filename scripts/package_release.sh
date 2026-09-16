@@ -22,7 +22,7 @@ cp "$repo_root/docs/six-routes-four-sends.md" \
     "$repo_root/docs/channel-offsets.md" "$staging_dir/docs/"
 cp "$repo_root/README.md" "$repo_root/CHANGELOG.md" "$staging_dir/"
 printf '%s\n' \
-    "WitchboardX v1.0.3 - up to 10 channels, six insert routes, four shared FX sends, per-channel timing offsets, trigger ducking and master filtering." \
+    "WitchboardX v1.0.4 CPU hotfix - up to 10 channels, six insert routes, four shared FX sends, per-channel timing offsets, trigger ducking and master filtering." \
     "Copy programs/plug-ins/*.o to the same path on the disting NT MicroSD card." \
     "The plug-in appears as 'WitchboardX' and uses GUID WtbX." \
     "Built as a no-DRAM firmware-safe release for disting NT v1.18 or later." \

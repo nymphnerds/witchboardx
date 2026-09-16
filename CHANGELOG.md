@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.0.4 — CPU hotfix
+
+- Add a fast path for stable zero-delay channel compensation. The latency
+  history remains available for later Offset changes, while unnecessary delay
+  reads and crossfade work are skipped when compensation is at zero.
+
 ## v1.0.3
 
 - Increase the insert-route count from five to six (Routes A–F).
