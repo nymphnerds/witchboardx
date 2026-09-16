@@ -380,6 +380,15 @@ struct SidechainRuntime
 constexpr int kInsertDelayCapacity = 1921; // 20 ms at 96 kHz + current sample
 constexpr int kMainDelayCapacity = 961;    // 10 ms at 96 kHz + current sample
 constexpr int kBypassDelayCapacity = 9601; // 100 ms at 96 kHz + current sample
+
+int activeInsertDelayCapacity()
+{
+	const float sampleRate = NT_globals.sampleRate;
+	if (sampleRate <= 0.0f || sampleRate >= 96000.0f)
+		return kInsertDelayCapacity;
+	return static_cast<int>(sampleRate * 0.02f + 0.5f) + 1;
+}
+
 struct StereoDelay
 {
 	float* data;
@@ -531,8 +540,9 @@ WitchboardAlgorithm::WitchboardAlgorithm(int channels, uint8_t* dram)
 	instanceParameters[insertSelectParam()] = parameterDefs[kMaxParams - 2];
 	instanceParameters[insertLatencyParam()] = parameterDefs[kMaxParams - 1];
 	parameters = instanceParameters;
+	const int insertCapacity = activeInsertDelayCapacity();
 	memset(&insertDryDelay, 0, sizeof(insertDryDelay));
-	insertDryDelay.capacity = kInsertDelayCapacity;
+	insertDryDelay.capacity = insertCapacity;
 	insertDryDelay.data = takeStorage<float>(dram, 5 * kInsertDelayCapacity);
 	memset(insertDryDelay.data, 0, sizeof(float) * 5 * kInsertDelayCapacity);
 	insertReturnDelays = takeStorage<StereoDelay>(dram, kNumRoutes);
@@ -540,7 +550,7 @@ WitchboardAlgorithm::WitchboardAlgorithm(int channels, uint8_t* dram)
 	for (int route = 0; route < kNumRoutes; ++route)
 	{
 		StereoDelay& delay = insertReturnDelays[route];
-		delay.capacity = kInsertDelayCapacity;
+		delay.capacity = insertCapacity;
 		delay.data = takeStorage<float>(dram, 2 * kInsertDelayCapacity);
 		memset(delay.data, 0, sizeof(float) * 2 * kInsertDelayCapacity);
 	}
@@ -1009,6 +1019,15 @@ void setPrimedDelay(StereoDelay& delay, int samples, int fadeSamples)
 		delay.initialised = true;
 	}
 	setDelay(delay, samples, fadeSamples);
+}
+
+void updateInsertDelayCapacity(StereoDelay& delay, int capacity)
+{
+	if (delay.capacity == capacity) return;
+	delay.capacity = capacity;
+	delay.valid = delay.write = delay.current = delay.target = 0;
+	delay.requested = delay.fadePosition = 0;
+	delay.initialised = false;
 }
 
 void processSharedReturnDelay(StereoDelay& delay, float& left, float& right)
@@ -1924,6 +1943,10 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 		if (deferredRoutes[route]) deferredMask |= static_cast<uint8_t>(1u << route);
 	for (int channel = 0; channel < self->numChannels; ++channel)
 		channelState[channel].deferred = (channelState[channel].finalRouteMask & deferredMask) != 0;
+	const int activeCapacity = activeInsertDelayCapacity();
+	updateInsertDelayCapacity(self->insertDryDelay, activeCapacity);
+	for (int route = 0; route < kNumRoutes; ++route)
+		updateInsertDelayCapacity(self->insertReturnDelays[route], activeCapacity);
 	const int maxInsertSamples = millisecondsToSamples(maxInsertLatency * 0.1f, sampleRate);
 	if (maxInsertSamples > 0 || self->insertDryDelay.current != 0
 		|| self->insertDryDelay.fadePosition != 0)
