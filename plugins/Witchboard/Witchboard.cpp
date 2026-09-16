@@ -1550,18 +1550,46 @@ inline void processPath(OutputPair* outputs,
 	collectedRight += (finalStereo ? finalRight : finalLeft) * pathGain;
 }
 
-// Keep direct path tests and callers that have no shared route metadata simple.
+// Use the original path when no return route is shared.
 inline void processPath(OutputPair* outputs,
 	const float* const* returnLeft, const float* const* returnRight,
 	const bool* returnStereo, int frame, float left, float right, bool stereo,
 	int route1, int route2, bool repeatProtection,
 	float pathGain, float channelGain, float& collectedLeft, float& collectedRight)
 {
-	const uint8_t routeUsers[kNumRoutes] = {};
-	bool sharedUsed[kNumRoutes] = {};
-	processPath(outputs, returnLeft, returnRight, returnStereo, frame, left, right,
-		stereo, route1, route2, repeatProtection, pathGain, channelGain,
-		routeUsers, sharedUsed, collectedLeft, collectedRight);
+	if (pathGain <= 0.0f)
+		return;
+
+	left *= channelGain;
+	right *= channelGain;
+
+	float intermediateLeft = left;
+	float intermediateRight = right;
+	bool intermediateStereo = stereo;
+	if (route1 >= 0)
+	{
+		addSignal(outputs[kRouteOutputBase + route1], frame, left, right, stereo, pathGain);
+		intermediateLeft = returnLeft[route1] ? returnLeft[route1][frame] : 0.0f;
+		intermediateRight = returnRight[route1] ? returnRight[route1][frame] : intermediateLeft;
+		intermediateStereo = returnStereo[route1];
+	}
+	if (repeatProtection && route1 >= 0 && route2 == route1)
+		route2 = -1;
+
+	float finalLeft = intermediateLeft;
+	float finalRight = intermediateRight;
+	bool finalStereo = intermediateStereo;
+	if (route2 >= 0)
+	{
+		addSignal(outputs[kRouteOutputBase + route2], frame, intermediateLeft, intermediateRight,
+			intermediateStereo, pathGain);
+		finalLeft = returnLeft[route2] ? returnLeft[route2][frame] : 0.0f;
+		finalRight = returnRight[route2] ? returnRight[route2][frame] : finalLeft;
+		finalStereo = returnStereo[route2];
+	}
+
+	collectedLeft += finalLeft * pathGain;
+	collectedRight += (finalStereo ? finalRight : finalLeft) * pathGain;
 }
 
 inline void mixChannelSignal(OutputPair* outputs, int frame, int outputIndex,
@@ -1898,12 +1926,20 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 
 			if (rt.insertSamplesRemaining[0] == 0 && rt.insertSamplesRemaining[1] == 0)
 			{
-				processPath(outputs, returnLeft, returnRight, returnStereo,
-					frame, left, right, state.stereo,
-					state.routes[0][rt.insertState[0]],
-					state.routes[1][rt.insertState[1]],
-					repeatProtection, 1.0f, rt.gain.value, routeUsers,
-					channelSharedUsed, channelLeft, channelRight);
+				if (anyShared)
+					processPath(outputs, returnLeft, returnRight, returnStereo,
+						frame, left, right, state.stereo,
+						state.routes[0][rt.insertState[0]],
+						state.routes[1][rt.insertState[1]],
+						repeatProtection, 1.0f, rt.gain.value, routeUsers,
+						channelSharedUsed, channelLeft, channelRight);
+				else
+					processPath(outputs, returnLeft, returnRight, returnStereo,
+						frame, left, right, state.stereo,
+						state.routes[0][rt.insertState[0]],
+						state.routes[1][rt.insertState[1]],
+						repeatProtection, 1.0f, rt.gain.value,
+						channelLeft, channelRight);
 			}
 			else
 			{
@@ -1914,21 +1950,32 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 					for (int insert2 = 0; insert2 < kNumInsertStates; ++insert2)
 					{
 						const float gain = rt.insertGain[0][insert1] * rt.insertGain[1][insert2];
-						processPath(outputs, returnLeft, returnRight, returnStereo,
-							frame, left, right, state.stereo,
-							state.routes[0][insert1],
-							state.routes[1][insert2],
-							repeatProtection, gain, rt.gain.value, routeUsers,
-							channelSharedUsed, channelLeft, channelRight);
+						if (anyShared)
+							processPath(outputs, returnLeft, returnRight, returnStereo,
+								frame, left, right, state.stereo,
+								state.routes[0][insert1],
+								state.routes[1][insert2],
+								repeatProtection, gain, rt.gain.value, routeUsers,
+								channelSharedUsed, channelLeft, channelRight);
+						else
+							processPath(outputs, returnLeft, returnRight, returnStereo,
+								frame, left, right, state.stereo,
+								state.routes[0][insert1],
+								state.routes[1][insert2],
+								repeatProtection, gain, rt.gain.value,
+								channelLeft, channelRight);
 					}
 				}
 			}
 			processDelay(self->channelDelays[channel], channelLeft, channelRight);
-			const int stableFinal = finalInsertRoute(state, rt.insertState[0],
-				rt.insertState[1], repeatProtection);
-			if (rt.insertSamplesRemaining[0] == 0 && rt.insertSamplesRemaining[1] == 0
-				&& stableFinal >= 0 && routeUsers[stableFinal] > 1)
-				channelLeft = channelRight = 0.0f;
+			if (anyShared)
+			{
+				const int stableFinal = finalInsertRoute(state, rt.insertState[0],
+					rt.insertState[1], repeatProtection);
+				if (rt.insertSamplesRemaining[0] == 0 && rt.insertSamplesRemaining[1] == 0
+					&& stableFinal >= 0 && routeUsers[stableFinal] > 1)
+					channelLeft = channelRight = 0.0f;
+			}
 			mixChannelSignal(outputs, frame, state.outputIndex, channelLeft, channelRight, state.fxGains);
 			if (anyShared)
 				for (int route = 0; route < kNumRoutes; ++route)
