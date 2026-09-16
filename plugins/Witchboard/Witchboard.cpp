@@ -1695,6 +1695,12 @@ inline int finalInsertRoute(const ChannelBlockState& state, int first, int secon
 uint8_t channelFinalRouteMask(const ChannelBlockState& state, const ChannelRuntime& rt,
 	bool repeatProtection)
 {
+	if (rt.insertSamplesRemaining[0] == 0 && rt.insertSamplesRemaining[1] == 0)
+	{
+		const int route = finalInsertRoute(state, rt.insertState[0], rt.insertState[1],
+			repeatProtection);
+		return route >= 0 ? static_cast<uint8_t>(1u << route) : 0;
+	}
 	uint8_t mask = 0;
 	for (int first = 0; first < kNumInsertStates; ++first)
 	{
@@ -1969,9 +1975,15 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 
 	for (int frame = 0; frame < numFrames; ++frame)
 	{
-		bool sharedUsed[kNumRoutes] = {};
-		float sharedSend[kNumRoutes][kNumFx] = {};
-		int sharedOutput[kNumRoutes] = {};
+		bool sharedUsed[kNumRoutes];
+		float sharedSend[kNumRoutes][kNumFx];
+		int sharedOutput[kNumRoutes];
+		if (anyDeferred)
+		{
+			memset(sharedUsed, 0, sizeof(sharedUsed));
+			memset(sharedSend, 0, sizeof(sharedSend));
+			memset(sharedOutput, 0, sizeof(sharedOutput));
+		}
 		float mainLeft = 0.0f;
 		float mainRight = 0.0f;
 		float bypassLeft = 0.0f;
@@ -2003,7 +2015,9 @@ void step(_NT_algorithm* algorithm, float* busFrames, int numFramesBy4)
 			if (!state.enabled)
 				continue;
 			float channelLeft = 0, channelRight = 0;
-			bool channelSharedUsed[kNumRoutes] = {};
+			bool channelSharedUsed[kNumRoutes];
+			if (state.deferred)
+				memset(channelSharedUsed, 0, sizeof(channelSharedUsed));
 
 			const float left = state.left[frame];
 			const float right = state.right ? state.right[frame] : left;
