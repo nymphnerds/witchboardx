@@ -11,12 +11,9 @@ A conventional channel insert expects one channel to own its return. If several
 channels use the same physical insert and each channel mixes that whole return
 back, the processed audio is multiplied.
 
-WitchboardX supports a **shared insert route** instead. Assign the same route
-(A–F) to the channels that should use one external processor. Their audio is
-summed on that route's send; WitchboardX reads and mixes the resulting physical
-return **once**. It identifies sharing from the channels' active route
-selections, including live insert switches. Two differently named routes
-pointed at the same hardware bus are not treated as one shared route.
+WitchboardX detects when channels share an insert bus, sums their audio on its
+send, and mixes the return **once**. This also works when you switch inserts
+while playing.
 
 Once an external processor has combined the channels, its return is one signal
 and cannot be separated back into individual channel returns. The four
