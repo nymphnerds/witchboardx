@@ -2,23 +2,64 @@
 
 # WitchboardX
 
-## What's new in v1.0.3
+## New features: shared inserts and latency
 
-- Six assignable insert routes (A–F), up from five.
-- Four shared stereo FX sends and returns, up from two. Per-channel Send select
-  and Send amount provide one-fader access to all four buses, with independent
-  stored levels; active sends are unaffected by bus selection. Dedicated MIDI
-  faders remain available for direct control of individual sends.
-- Insert return offsets align external insert routes, including PC/iPad FX,
-  with their round-trip delays. The largest active route offset sets the
-  reference; Witchboard delays faster paths to match. Range: 0 to 20 ms.
-- Up to ten channels fit alongside the expanded routing within the disting NT
-  parameter limit.
+WitchboardX supports up to **ten stereo channels**, **six insert routes (A–F)**,
+and **four stereo Send FX paths**.
+
+### Shared insert returns
+
+A conventional channel insert expects one channel to own its return. If several
+channels use the same physical insert and each channel mixes that whole return
+back, the processed audio is multiplied.
+
+WitchboardX supports a **shared insert route** instead. Assign the same route
+(A–F) to the channels that should use one external processor. Their audio is
+summed on that route's send; WitchboardX reads and mixes the resulting physical
+return **once**. It identifies sharing from the channels' active route
+selections, including live insert switches. Two differently named routes
+pointed at the same hardware bus are not treated as one shared route.
+
+Once an external processor has combined the channels, its return is one signal
+and cannot be separated back into individual channel returns. The four
+**Send FX** paths are separate from these inserts. If a shared insert return
+feeds a Send FX path, WitchboardX uses the highest contributing send amount
+rather than adding the amounts together.
+
+### The Latency page
+
+Channels routed to **Main** can be sidechained. Channels routed to **Bypass**
+avoid that ducking. When SC Lookahead delays Main, Bypass needs a matching
+delay to keep the two paths in time.
+
+The final **Latency** page puts these controls together:
+
+| Control | Purpose |
+| --- | --- |
+| **SC Lookahead** | Delays Main for sidechain ducking when Sidechain is on. It is the same parameter shown on Sidechain/Master. |
+| **Bypass Offset** | Delays channels routed to Bypass—the channels that are not sidechained—so they line up with Main. Changing SC Lookahead copies its active delay here. A later manual edit holds until the next lookahead or Sidechain mode change. |
+| **Insert route** | Selects which physical insert route's timing to edit. |
+| **Insert return offset** | Sets that route's external round-trip delay, from 0.0 to 20.0 ms. |
+
+**Each insert route has its own offset**, whether one channel or several
+channels use it. The largest offset among active routes sets the common timing
+reference. WitchboardX delays dry paths and faster insert returns only as much
+as needed to meet that reference; it does not add all the route offsets
+together. External round-trip latency cannot be removed, so the rest of the
+mix waits for it. Send FX returns have no separate offset setting in this
+build.
+
+### CPU use
+
+In one on-device test at **44.1 kHz** with **nine WitchboardX channels**,
+**latency offsets active**, **sidechain enabled**, and **filter enabled**, the
+WitchboardX algorithm showed **26% CPU**. This is the algorithm's own CPU
+reading; usage will vary with routing and active processing.
 
 > **Firmware requirement: disting NT v1.18 or later.**
 
-> **Preset warning:** v1.0.3 changes the parameter layout. Do not load presets
-> saved with earlier WitchboardX versions directly. 
+> **Preset warning:** The current build changes the parameter layout. Use a
+> preset saved for this build; do not load older WitchboardX presets directly.
 
 Witchboard is a routing mixer and serial patchbay plug-in for the Expert Sleepers
 disting NT.
@@ -54,7 +95,7 @@ A major reason Witchboard exists is **CPU efficiency**.
 
 Building the same system from separate disting NT algorithms means stacking mixers, routing utilities, sidechain processing, filters, extra summing stages and other helpers. Witchboard combines those jobs inside one purpose-built native C++ algorithm, avoiding a lot of duplicated routing and processing overhead.
 
-In a real hardware patch, with several channels active, the master filter running and the sidechain pumping, Witchboard typically sits around **17–20% CPU** on my disting NT. That leaves far more of the disting NT available for instruments, samplers, effects and other algorithms.
+In a recent on-device test with nine channels, active latency offsets, the master filter and sidechain enabled at 44.1 kHz, WitchboardX showed **26% CPU**. That reading is specific to that patch; routing and active processing affect CPU use.
 
 The point is not simply to cram features into one plug-in. It is to provide the particular mixer/routing system the patch actually needs **without spending a large proportion of the NT's processing budget just assembling it from generic pieces**.
 
@@ -139,7 +180,7 @@ See [Cycling ’74 curve~](https://docs.cycling74.com/reference/curve~/) and
 - Two serial insert stages per channel
 - Six assignable insert routes (A–F)
 - Four shared stereo FX sends
-- Per-channel timing offsets from −30.0 to 0.0 ms
+- Per-insert-route return offsets from 0.0 to 20.0 ms, including shared inserts
 - Main / Bypass output paths
 - Trigger-driven Main ducking with 0–10 ms lookahead
 - Bypass Offset with automatic lookahead compensation and 0–100 ms effective delay
@@ -159,7 +200,7 @@ Input L/R
   -> Gain
   -> Insert 1
   -> Insert 2
-  -> Per-channel timing offset
+  -> Insert return alignment (when an insert is active)
   -> FX Sends 1–4
   -> Main or Bypass
 ```
@@ -401,8 +442,8 @@ See [the Latency page guide](docs/latency-page-guide.md) for a setup example.
 Both delays crossfade old/new taps over 5 ms. Rapid requests finish the current
 fade, then fade toward the latest target, so settling can take up to 10 ms.
 Delay history stays populated at zero delay. After a live SC Off transition
-settles, Main adds no lookahead latency; manual Bypass Offset remains active.
-At SC Off and Bypass Offset zero there is no new steady-state latency.
+settles, Main adds no lookahead latency and the automatic Bypass Offset becomes
+zero. A Sidechain mode change replaces any manual Bypass Offset.
 
 ### Insert return alignment — PC or iPad inserts
 
@@ -427,8 +468,8 @@ The master filter is a state-variable DJ-style sweep filter.
 | Parameter | Range | Default |
 |---|---:|---:|
 | `Filter enable` | Off / On | Off |
-| `HP limit` | 0..100% | 20% |
-| `LP limit` | 0..100% | 70% |
+| `HP limit` | 0..100% | 70% |
+| `LP limit` | 0..100% | 20% |
 | `Filter Q` | 0..100% | 10% |
 | `Filter sweep` | -100..100% | 0% |
 
@@ -535,8 +576,8 @@ Example:
 ```json
 "witchboardNames": {
   "channels": ["Kick", "Snare", "Hats", "Perc"],
-  "routes": ["Percall 1", "Pico MMF", "Steve's MS-22", "Kirbinator", "Unused"],
-  "fx": ["Radiant", "Main FX 2"],
+  "routes": ["Percall 1", "Pico MMF", "Steve's MS-22", "Kirbinator", "iPad Stereo", "Unused F"],
+  "fx": ["Radiant", "iPad 1", "iPad 2", "iPad 3"],
   "slots": [
     ["Dry", "", "", ""],
     ["Dry", "", "", ""]
@@ -556,19 +597,12 @@ Copy the built object to the disting NT MicroSD plug-in directory, then rescan
 plug-ins or restart the module.
 
 This release has a different parameter layout from earlier WitchboardX builds.
-Load the included matching preset or convert a supported preset before loading;
-do not reuse an older preset directly. The supplied conversion helper supports
-the personal eight-route/two-send layout with up to ten channels:
-
-```sh
-python3 scripts/migrate_six_routes_four_sends.py old.json six-four.json --channels 10
-python3 scripts/migrate_channel_offsets.py six-four.json migrated.json
-```
-
-The converter preserves other algorithms and stops if it finds unsupported
-routes or mappings rather than silently discarding them. It does not convert
-the earlier public-release preset layout. Back up presets before conversion;
-the helper writes a new file and refuses to overwrite an existing destination.
+Load the included matching preset; do not reuse an older preset directly.
+The repository includes a conversion helper for one earlier personal
+eight-route/two-send layout, but it targets an intermediate parameter schema
+and does **not** produce a preset ready for this build. See
+[six-route/four-send migration notes](docs/six-routes-four-sends.md) before
+converting an older patch. Back up presets before editing them.
 
 ## JSON Naming Guide
 
@@ -601,20 +635,18 @@ Minimal shape inside the `WtbX` slot:
   "guid": "WtbX",
   "specs": [10, 0, 0],
   "witchboardNames": {
-    "channels": ["Kick", "Snare"],
+    "channels": ["Kick", "Drums ST"],
     "routes": [
       "Percall 1",
       "Pico MMF",
       "Steve's MS-22",
       "Kirbinator",
-      "Unused",
-      "Route F",
-      "Route G",
-      "Route H"
+      "iPad Stereo",
+      "Unused F"
     ],
-    "fx": ["Radiant", "Main FX 2"]
+    "fx": ["Radiant", "iPad 1", "iPad 2", "iPad 3"]
   },
-  "name": "MAIN WITCHBOARD        ",
+  "name": "WitchboardX            ",
   "parameters": [ ... ]
 }
 ```
@@ -629,29 +661,29 @@ Full naming example:
 "witchboardNames": {
   "channels": [
     "Kick",
-    "Snare",
-    "Hats",
-    "Perc",
-    "Radio",
-    "Chord",
-    "Pico",
-    "Pony",
-    "Poly Res",
-    "Perc+Breaks"
+    "Drums ST",
+    "Chimera",
+    "Radio Station",
+    "Chord Organ",
+    "Pico VCO",
+    "Pony VCO",
+    "Disting Inst",
+    "iPad Inst",
+    "Channel 10"
   ],
   "routes": [
     "Percall 1",
     "Pico MMF",
     "Steve's MS-22",
     "Kirbinator",
-    "Unused",
-    "Route F",
-    "Route G",
-    "Route H"
+    "iPad Stereo",
+    "Unused F"
   ],
   "fx": [
     "Radiant",
-    "Main FX 2"
+    "iPad 1",
+    "iPad 2",
+    "iPad 3"
   ],
   "slots": [
     ["Dry", "", "", ""],
@@ -665,10 +697,10 @@ channel 1, the second is channel 2, and so on. If there are fewer names than
 active channels, the missing channels fall back to `Channel 1`, `Channel 2`, etc.
 Extra names are ignored.
 
-`routes` names Route A-H. The first string is Route A, the second is Route B,
-through Route H.
+`routes` names Route A–F. The first string is Route A, the second is Route B,
+through Route F.
 
-`fx` names FX Send 1 and FX Send 2.
+`fx` names FX Send 1 through FX Send 4.
 
 `slots` is optional. Empty strings, missing slot entries, or the default strings
 `Slot 1`, `Slot 2` and `Slot 3` mean "auto-name from the route assigned to that
@@ -696,58 +728,56 @@ With that setup, the Disting displays the assigned route name. For example, if
 `Insert 1 Slot 1` points to Route B and Route B is named `Pico MMF`, selecting
 Slot 1 displays `Pico MMF`.
 
-The baseline preset currently uses the default strings:
+The included preset currently uses empty strings for automatic slot names:
 
 ```json
 "slots": [
-  ["Dry", "Slot 1", "Slot 2", "Slot 3"],
-  ["Dry", "Slot 1", "Slot 2", "Slot 3"]
+  ["Dry", "", "", ""],
+  ["Dry", "", "", ""]
 ]
 ```
 
-In WitchboardX those default slot strings still keep auto naming active, so the
-display follows the assigned route names.
+The display follows the assigned route names.
 
-Actual baseline example from
+Actual naming example from
 [presets/WitchboardX.json](presets/WitchboardX.json):
 
 ```json
 "witchboardNames": {
   "channels": [
     "Kick",
-    "Snare",
-    "Hats",
-    "Perc",
-    "Radio",
-    "Chord",
-    "Pico",
-    "Pony",
-    "Poly Res",
-    "Perc+Breaks"
+    "Drums ST",
+    "Chimera",
+    "Radio Station",
+    "Chord Organ",
+    "Pico VCO",
+    "Pony VCO",
+    "Disting Inst",
+    "iPad Inst",
+    "Channel 10"
   ],
   "routes": [
     "Percall 1",
     "Pico MMF",
     "Steve's MS-22",
     "Kirbinator",
-    "Unused",
-    "Route F",
-    "Route G",
-    "Route H"
+    "iPad Stereo",
+    "Unused F"
   ],
   "fx": [
     "Radiant",
-    "Main FX 2"
+    "iPad 1",
+    "iPad 2",
+    "iPad 3"
   ],
   "slots": [
-    ["Dry", "Slot 1", "Slot 2", "Slot 3"],
-    ["Dry", "Slot 1", "Slot 2", "Slot 3"]
+    ["Dry", "", "", ""],
+    ["Dry", "", "", ""]
   ]
 }
 ```
 
-In the current plugin, the default slot strings shown above still mean
-"auto-name from the assigned route".
+Empty slot strings mean "auto-name from the assigned route".
 
 Practical JSON rules:
 

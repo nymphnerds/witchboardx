@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.0.5 — shared insert returns and route timing
+
+- Mix a physical insert return once when several channels select the same
+  insert route, avoiding duplicated processed audio.
+- Replace per-channel negative offsets with independent 0–20 ms insert route
+  offsets. The largest active offset sets the common timing reference.
+- Put SC Lookahead, Bypass Offset, Insert route, and Insert return offset on the
+  final Latency page. Bypass Offset follows active SC Lookahead until manually
+  changed or the sidechain/lookahead setting changes.
+- Reduce audio-loop work for unused sends and insert routes and share delay
+  history for insert alignment. Keep the direct path for unshared inserts.
+- Refresh the README and preset compatibility guidance for this layout.
+
 ## v1.0.4 — CPU hotfix
 
 - Add a fast path for stable zero-delay channel compensation. The latency
