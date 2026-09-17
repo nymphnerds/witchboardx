@@ -2,12 +2,10 @@
 
 # WitchboardX
 
-## New features: shared inserts and latency compensation
+## New feature: shared insert returns
 
 WitchboardX supports up to **ten stereo channels**, **six insert routes (A–F)**,
 and **four stereo Send FX paths**.
-
-### Shared insert returns
 
 A conventional channel insert expects one channel to own its return. If several
 channels use the same physical insert and each channel mixes that whole return
@@ -26,7 +24,7 @@ and cannot be separated back into individual channel returns. The four
 feeds a Send FX path, WitchboardX uses the highest contributing send amount
 rather than adding the amounts together.
 
-### The Latency page
+## Latency compensation
 
 Channels routed to **Main** can be sidechained. Channels routed to **Bypass**
 avoid that ducking. When SC Lookahead delays Main, Bypass needs a matching
