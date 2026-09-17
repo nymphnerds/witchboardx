@@ -14,26 +14,12 @@ double the audio.
 
 ## Latency compensation
 
-Channels routed to **Main** can be sidechained. Channels routed to **Bypass**
-avoid that ducking. When SC Lookahead delays Main, Bypass needs a matching
-delay to keep the two paths in time.
-
-The final **Latency** page puts these controls together:
-
 | Control | Purpose |
 | --- | --- |
 | **SC Lookahead** | Delays Main for sidechain ducking when Sidechain is on. It is the same parameter shown on Sidechain/Master. |
 | **Bypass Offset** | Delays channels routed to Bypass—the channels that are not sidechained—so they line up with Main. Changing SC Lookahead copies its active delay here. A later manual edit holds until the next lookahead or Sidechain mode change. |
 | **Insert route** | Selects which physical insert route's timing to edit. |
 | **Insert return offset** | Sets that route's external round-trip delay, from 0.0 to 20.0 ms. |
-
-**Each insert route has its own offset**, whether one channel or several
-channels use it. The largest offset among active routes sets the common timing
-reference. WitchboardX delays dry paths and faster insert returns only as much
-as needed to meet that reference; it does not add all the route offsets
-together. External round-trip latency cannot be removed, so the rest of the
-mix waits for it. Send FX returns have no separate offset setting in this
-build.
 
 ### CPU use
 
