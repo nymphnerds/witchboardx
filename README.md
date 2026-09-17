@@ -2,7 +2,7 @@
 
 # WitchboardX
 
-## New features: shared inserts and latency
+## New features: shared inserts and latency compensation
 
 WitchboardX supports up to **ten stereo channels**, **six insert routes (A–F)**,
 and **four stereo Send FX paths**.
