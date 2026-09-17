@@ -1,12 +1,18 @@
 # Shared insert returns and timing in WitchboardX
 
-## One insert, several channels
+## What makes the insert shared?
 
-An **insert** sends audio out of WitchboardX to an external processor, then brings the processed audio back. You can route several mixer channels through the same insert—for example, an iPad running a stack of effects. Their audio is summed on the insert send, so the iPad receives one combined signal and produces one return.
+A conventional channel **insert** sends one channel to an external effect and brings that channel's return back into its signal path. It assumes the return belongs to that one channel. If two channels are sent to the **same physical insert** and the mixer treats the return as belonging to both, it mixes the *entire* processed return twice. Two channels sharing an iPad effect should not double its output just because both selected it.
 
-That return must be mixed **once**, even if three channels sent audio to it. Mixing it once for each channel would make it too loud. WitchboardX handles this automatically when the channels select the **same insert route** (A–F). It looks at their route selections, including routes active during a switch, and reads that route's return once. It does not inspect the audio or recognise that two different route names happen to use the same physical bus. To share an insert return, select the same route on those channels.
+WitchboardX lets several channels deliberately select one insert route (A–F). For example:
 
-The external processor has already combined the channels, so its return cannot be split back into separate channel signals. This is a shared **insert**, separate from WitchboardX's four **Send FX** paths. If the shared return also feeds a Send FX path, WitchboardX uses the highest send amount requested by its contributing channels; it does not add those amounts together.
+- Drums select route E, and a synth channel also selects route E.
+- WitchboardX sums their outgoing audio onto route E's send. The iPad receives **drums + synth** and returns one processed signal.
+- WitchboardX mixes that return **once for route E**, not once for drums and again for synth. The return therefore stays at its intended level.
+
+WitchboardX knows the return is shared because it counts the channels currently using **route E**, including routes involved in an insert switch. The channels must select the **same WitchboardX route**: the plugin does not infer sharing by inspecting audio or noticing that two differently named routes use the same hardware bus.
+
+The iPad's return is already a combined signal; it cannot be separated back into individual drum and synth returns. This shared **insert** is distinct from WitchboardX's four **Send FX** paths. If the shared return also feeds a Send FX path, WitchboardX uses the highest contributor send amount rather than adding their amounts together.
 
 ## Keeping the return in time
 
