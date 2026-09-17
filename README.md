@@ -9,10 +9,9 @@
   and Send amount provide one-fader access to all four buses, with independent
   stored levels; active sends are unaffected by bus selection. Dedicated MIDI
   faders remain available for direct control of individual sends.
-- Latency Compensation per channel aligns external insert returns, including
-  PC/iPad FX, with different round-trip delays. The most negative channel
-  Offset sets the reference; Witchboard delays faster paths to match, adding
-  the corresponding common latency to the mix. Range: 0 to −30 ms.
+- Insert return offsets align external insert routes, including PC/iPad FX,
+  with their round-trip delays. The largest active route offset sets the
+  reference; Witchboard delays faster paths to match. Range: 0 to 20 ms.
 - Up to ten channels fit alongside the expanded routing within the disting NT
   parameter limit.
 

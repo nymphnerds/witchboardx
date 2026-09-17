@@ -1,5 +1,7 @@
 # Insert return timing
 
+For a short explanation and an iPad insert example, see [Why WitchboardX uses insert return offsets](why-insert-route-offsets.md).
+
 This branch keeps three timing controls:
 
 - **SC Lookahead** stays on **Sidechain/Master**.
