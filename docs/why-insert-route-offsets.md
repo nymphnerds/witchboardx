@@ -1,19 +1,23 @@
-# Why WitchboardX uses insert return offsets
+# Shared insert returns and timing in WitchboardX
 
-The biggest reason for replacing per-track offsets was **CPU and reliability**. In my disting NT setup, earlier offset builds pushed WitchboardX toward 40% CPU and eventually caused audio cutouts; with Poly Res enabled, the whole NT could reach 99%. A mixer intended to be light on CPU was no longer usable for this patch. The earlier per-track design also gave every channel a timing control when the delay I needed to correct came from an external **insert** round trip.
+## One insert, several channels
 
-The redesign sets timing per physical insert route. Tracks sharing an insert return share its offset, and the mixer only has to account for the routes in use. CPU improvements also came from skipping inactive Send FX work and refining the shared return path, so the improvement cannot honestly be credited to the offset control change alone. In the measured 44.1 kHz, ten-channel setup, the later build ran at **23% WitchboardX CPU with 0 ms offset** and **28% with an 18.2 ms insert offset**, with Poly Res enabled and no cutouts reported during that test.
+An **insert** sends audio out of WitchboardX to an external processor, then brings the processed audio back. You can route several mixer channels through the same insert—for example, an iPad running a stack of effects. Their audio is summed on the insert send, so the iPad receives one combined signal and produces one return.
 
-The final **Offset** page now has **Bypass Offset**, **Insert route**, and **Insert return offset**. I select the insert route and set the measured round-trip delay once. **SC Lookahead** stays with the sidechain controls. WitchboardX uses the largest active insert offset as its timing reference and holds the faster paths back to meet the late return. The offset cannot make an external processor return audio earlier; it aligns the rest of the mix with it.
+That return must be mixed **once**, even if three channels sent audio to it. Mixing it once for each channel would make it too loud. WitchboardX handles this automatically when the channels select the **same insert route** (A–F). It looks at their route selections, including routes active during a switch, and reads that route's return once. It does not inspect the audio or recognise that two different route names happen to use the same physical bus. To share an insert return, select the same route on those channels.
 
-## Shared insert returns
+The external processor has already combined the channels, so its return cannot be split back into separate channel signals. This is a shared **insert**, separate from WitchboardX's four **Send FX** paths. If the shared return also feeds a Send FX path, WitchboardX uses the highest send amount requested by its contributing channels; it does not add those amounts together.
 
-Several channels can select the same physical insert route, for example the iPad route. WitchboardX detects this from the channels' active **insert route assignments**: it counts which channels feed each route, including routes involved in a live insert switch. It does **not** listen to the audio or compare bus numbers to guess whether two separately configured routes are the same device. To share a return, assign the channels to the same WitchboardX insert route.
+## Keeping the return in time
 
-WitchboardX sums those channels' outgoing audio onto that route's send bus. The iPad processes the combined signal and sends back **one** physical return. WitchboardX then reads and mixes that return **once per route**, even though several channels contributed to it. Reading it once avoids doubling the returned signal, and the route's single offset aligns that return with the dry mix. If contributors feed a Send FX path too, WitchboardX uses the **highest** contributor send amount for that shared return rather than adding the amounts together.
+An iPad or computer takes time to process and return audio. Without compensation, its processed signal can arrive behind the channels that stayed inside WitchboardX. On the final **Offset** page, select the **Insert route** and set **Insert return offset** to that route's round-trip delay. All channels using that route share the same setting.
 
-Once the external processor has combined those channels, its return is one audio signal; WitchboardX cannot split it back into separate channel returns. This feature is for deliberately shared **inserts**, distinct from the four **Send FX** return paths.
+WitchboardX takes the largest offset among active insert routes as its timing reference and delays faster paths to line them up with the slowest return. It cannot make an external return arrive earlier. **Bypass Offset** is on the same page; **SC Lookahead** remains with the sidechain settings. Send FX returns have no separate offset control in this build.
 
-In my current patch, an insert bus goes out to an iPad and through a stack of effects before returning to WitchboardX. Setting **Insert return offset** to **6.0 ms** on that route brings the processed return into time with the dry paths. To my ears, the result is rock tight and solid while letting me use the iPad effects as part of the live mix. The 23%/28% figures above came from a separate 0 ms/18.2 ms comparison, not a CPU reading at 6.0 ms.
+In my setup, an insert bus runs through a stack of iPad effects. A **6.0 ms insert return offset** brings it into line with the dry mix; to my ears, it is rock tight and solid.
 
-This setting applies to **insert returns**. The separate **Send FX** returns do not have an offset control in this build.
+## Why the offset is per route
+
+An earlier design gave every track its own offset. On my disting NT, earlier offset builds pushed WitchboardX toward **40% CPU** and eventually cut out; with Poly Res enabled, total NT CPU could hit **99%**. The delay I needed to correct belonged to the external insert route, not to each track separately, so a route setting was a better fit.
+
+The later build also reduced other processing work, especially for inactive Send FX and shared returns. In a 44.1 kHz, ten-channel test with Poly Res enabled, WitchboardX measured **23% CPU at 0 ms** and **28% at an 18.2 ms insert offset**, with no cutouts reported during that test. Those improvements cannot be credited to the offset change alone. The 6.0 ms iPad setting above is my current listening result, not the setting used for those CPU figures.
