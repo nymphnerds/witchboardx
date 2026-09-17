@@ -379,8 +379,8 @@ There are no Attack/Hold/Release/Makeup, Gate/Audio modes, or breakpoints.
 
 ### Output / latency alignment — `Bypass Offset`
 
-`Bypass Offset` belongs conceptually to the output/routing side of Witchboard,
-not to the ducker itself.
+`Bypass Offset` is on the final Offset page with Insert route and Insert return
+offset. SC Lookahead stays on Sidechain/Master.
 
 | Control | Range | Initial value |
 | --- | --- | --- |
@@ -398,8 +398,8 @@ contribution, then the new contribution is applied.
 Physical delay clamps to 0–100 ms. Hidden trim metadata preserves manual intent
 at either limit, including across preset save/load; a direct Bypass Offset edit
 replaces that trim. A positive-only Bypass delay cannot advance a late Bypass
-branch; use the per-channel Offset page to align a late channel against the rest
-of the mix.
+branch. Insert return offset aligns an external insert route with the rest of
+the mix.
 
 Both delays crossfade old/new taps over 5 ms. Rapid requests finish the current
 fade, then fade toward the latest target, so settling can take up to 10 ms.
@@ -407,32 +407,19 @@ Delay history stays populated at zero delay. After a live SC Off transition
 settles, Main adds no lookahead latency; manual Bypass Offset remains active.
 At SC Off and Bypass Offset zero there is no new steady-state latency.
 
-### Latency Compensation per channel — align a late PC or iPad insert
+### Insert return alignment — PC or iPad inserts
 
-If one channel goes out to an iPad or PC effect and comes back late, its drums
-or other transients can land behind the channels that stayed dry. Use Offset to
-line those paths up inside Witchboard.
+If an external insert route returns late, open the final Offset page, select
+its physical **Insert route** (A–F), and set **Insert return offset** to its
+measured roundtrip latency, from 0.0 to 20.0 ms in 0.1 ms steps. For example,
+if a Channel 2 iPad insert uses route E and returns 12 ms late, select E and
+set 12.0 ms. The setting belongs to route E, including when multiple channels
+share that physical insert return.
 
-For example, route Channel 2 through an iPad effect using a channel insert. If
-the round trip makes Channel 2 about 12 ms late, open the Offset page, set
-**Channel** to `2`, and set **Offset** to `−12.0 ms`. Channel selects which
-channel's timing you are describing; Offset sets how late that channel is.
-Witchboard leaves Channel 2 with no extra alignment delay and adds 12 ms to the
-other channels, so they meet at the mixer output. Each channel has its own
-Offset value. The range is `0` to `−30.0 ms` in `0.1 ms` steps; set the amount
-to the insert's round-trip delay, then fine-tune by listening or comparing a
-sharp transient.
-
-This is delay compensation, not a way to make the iPad or PC return arrive
-earlier: Witchboard cannot remove the insert's round-trip latency. It holds the
-other channels back to match the late one, so a `−12.0 ms` setting means the
-aligned mix is delayed by 12 ms. The most negative channel setting determines
-that shared delay. Offset runs after both channel inserts and before the FX
-sends and Main/Bypass routing.
-
-This applies when the late path belongs to one channel. A **Master Insert** is
-after the channels are combined; its latency affects the whole mix together, so
-per-channel Offset cannot compensate for it.
+The largest active insert route offset sets the common alignment delay. Faster
+Main, Bypass, sidechain key, and insert paths are held back to match. This
+cannot make an external return arrive earlier. FX sends and FX returns have no
+separate offset control. See [insert return timing](docs/insert-return-timing.md).
 
 Factory sidechain values are **Depth 69%**, **Lookahead 6 ms**, **Env Length about 300 ms**, **Curve +20**, and **Smooth 4% (8 ms)**. Sidechain itself defaults to **Off**, so enabling it gives the intended musical pump without forcing ducking on every new patch.
 

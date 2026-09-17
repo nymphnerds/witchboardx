@@ -1,6 +1,6 @@
 # Six routes, four sends
 
-WitchboardX supports 1–10 channels, six insert routes (A–F), and four complete FX send/return setups. Ten channels use **241 NT parameters**: 89 globals plus 15 per channel and two insert return timing controls on Final Outputs. See [insert return timing](insert-return-timing.md) for the appended IDs and preset behavior. Repeat Protection remains switchable. Switch fade appears only on Global.
+WitchboardX supports 1–10 channels, six insert routes (A–F), and four complete FX send/return setups. Ten channels use **241 NT parameters**: 89 globals plus 15 per channel and two insert return timing controls on the final Offset page. See [insert return timing](insert-return-timing.md) for the appended IDs and preset behavior. Repeat Protection remains switchable. Switch fade appears only on Global.
 
 ## Send editor
 

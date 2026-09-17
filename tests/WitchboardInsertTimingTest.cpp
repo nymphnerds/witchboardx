@@ -44,8 +44,13 @@ struct TimingFixture
 void testRouteEditorAndPreset()
 {
     TimingFixture f;
-    assert(f.alg->parameterPages->numPages == 7);
-    assert(f.alg->parameterPages->pages[2].numParams == 7);
+    assert(f.alg->parameterPages->numPages == 8);
+    assert(f.alg->parameterPages->pages[2].numParams == 4);
+    const auto& offset = f.alg->parameterPages->pages[7];
+    assert(strcmp(offset.name, "Offset") == 0 && offset.numParams == 3);
+    assert(offset.params[0] == kParamBypassOffset);
+    assert(offset.params[1] == f.alg->insertSelectParam());
+    assert(offset.params[2] == f.alg->insertLatencyParam());
     assert(f.alg->parameters[f.alg->insertLatencyParam()].min == 0);
     assert(f.alg->parameters[f.alg->insertLatencyParam()].max == 200);
     f.v[f.alg->insertLatencyParam()] = 200;

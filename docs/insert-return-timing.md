@@ -3,10 +3,10 @@
 This branch keeps three timing controls:
 
 - **SC Lookahead** stays on **Sidechain/Master**.
-- **Bypass Offset** stays on **Final Outputs** and retains its SC auto-follow behavior.
-- **Insert route** and **Insert return offset** are on **Final Outputs**. Select one of the six physical insert routes, then set its roundtrip offset from 0.0 to 20.0 ms. The six values save in the NT preset.
+- **Bypass Offset** is on the final **Offset** page and retains its SC auto-follow behavior.
+- **Insert route** and **Insert return offset** are on the final **Offset** page. Select one of the six physical insert routes, then set its roundtrip offset from 0.0 to 20.0 ms. The six values save in the NT preset.
 
-There is no per-channel offset page. FX sends and FX returns have no independent offset control in this build. The four Send FX systems still route normally.
+There is no per-channel offset control. FX sends and FX returns have no independent offset control in this build. The four Send FX systems still route normally.
 
 The largest active insert route offset sets the common timing reference. The Main and Bypass dry sums and the sidechain key receive that delay; a deferred insert return receives the difference between the reference and its route's configured offset. A physical return shared by channels is read and mixed once. For a shared Send FX feed, the highest contributor send amount applies to that return. Zero offsets use the direct path.
 

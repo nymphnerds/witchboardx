@@ -13,8 +13,8 @@
 ## Architecture and controls to preserve
 
 - This branch has ten channels, six physical **insert routes**, and four **send FX** paths. Do not conflate inserts with send FX returns.
-- The old per-channel negative offset page was removed. **Insert route** and **Insert return offset** editors are on Final Outputs. There is no send FX return offset in this version.
-- **SC Lookahead remains in Sidechain/Master. Bypass Offset remains in Final Outputs.** These are separate user controls feeding one coordinated timing calculation. Changing an insert return offset must not change the SC Lookahead parameter.
+- The old per-channel negative offset control was removed. **Bypass Offset**, **Insert route**, and **Insert return offset** are on the final Offset page. There is no send FX return offset in this version.
+- **SC Lookahead remains in Sidechain/Master.** These are separate user controls feeding one coordinated timing calculation. Changing an insert return offset must not change the SC Lookahead parameter.
 - The highest offset among active insert routes sets the common insert reference. Dry Main, dry Bypass, and the active SC key follow that reference; each deferred insert return gets `reference - its route offset`. Main then receives its configured SC lookahead; Bypass receives its configured Bypass offset/auto-follow timing. This keeps the relative SC lookahead constant when an insert offset changes.
 - A shared physical insert return is read once. Its contribution to a send FX path uses the highest wet amount among contributing channels. No audio-loop allocation.
 - Serial Insert 1 + Insert 2 paths with different external latencies remain insufficiently device-validated; the route offset is treated as effective latency of the final return.

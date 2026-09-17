@@ -28,7 +28,7 @@ void testPagesAndDefaults()
 	TenChannels f;
 	assert(specifications[0].max == 10 && specifications[0].def == 10);
 	assert(f.requirements.numParameters == 241);
-	assert(f.algorithm->parameterPages->numPages == 15);
+	assert(f.algorithm->parameterPages->numPages == 16);
 	assert(kParamBypassOffset == 88);
 	assert(kNumGlobalParams == 89 && kNumChannelParams == 15);
 	bool seen[241] = {};
@@ -51,9 +51,13 @@ void testPagesAndDefaults()
 		}
 	}
 	const auto& outputs = f.algorithm->parameterPages->pages[2];
-	const int expectedOutputs[] = {37,38,39,40,88,239,240};
-	assert(strcmp(outputs.name, "Final Outputs") == 0 && outputs.numParams == 7);
-	for (int i = 0; i < 7; ++i) assert(outputs.params[i] == expectedOutputs[i]);
+	const int expectedOutputs[] = {37,38,39,40};
+	assert(strcmp(outputs.name, "Final Outputs") == 0 && outputs.numParams == 4);
+	for (int i = 0; i < 4; ++i) assert(outputs.params[i] == expectedOutputs[i]);
+	const auto& offset = f.algorithm->parameterPages->pages[15];
+	const int expectedOffset[] = {88,239,240};
+	assert(strcmp(offset.name, "Offset") == 0 && offset.numParams == 3);
+	for (int i = 0; i < 3; ++i) assert(offset.params[i] == expectedOffset[i]);
 	const auto& master = f.algorithm->parameterPages->pages[4];
 	assert(master.numParams == 18);
 	for (int i = 0; i < 7; ++i) assert(master.params[i] == 70+i);

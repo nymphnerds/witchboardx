@@ -134,7 +134,8 @@ enum ChannelParam
 
 constexpr int kGlobalPageParams = 2;
 constexpr int kRouteSetupParams = kParamMainL - 1;
-constexpr int kFinalOutputParams = kParamFx1L - kParamMainL + 1; // Bypass Offset
+constexpr int kFinalOutputParams = kParamFx1L - kParamMainL;
+constexpr int kOffsetPageParams = 3;
 constexpr int kFxSetupParams = kNumFx * kNumFxParams;
 constexpr int kMasterPageParams = kNumGlobalParams - kParamSidechainMode - 1;
 constexpr int kMaxParams = kNumGlobalParams + kMaxChannels * kNumChannelParams + 2;
@@ -294,7 +295,7 @@ static const uint8_t routeSetupPageParams[kRouteSetupParams] = {
 
 static const uint8_t finalOutputPageParams[kFinalOutputParams] = {
 	kParamMainL, kParamMainR,
-	kParamBypassL, kParamBypassR, kParamBypassOffset,
+	kParamBypassL, kParamBypassR,
 };
 
 static uint8_t fxSetupPageParams[kFxSetupParams];
@@ -437,7 +438,7 @@ struct WitchboardAlgorithm : public _NT_algorithm
 	int16_t insertLatencies[kNumRoutes]; // tenths of a millisecond
 	int insertSelected, insertDisplayed;
 	bool insertInitialised, insertRestorePending, insertPublishing;
-	uint8_t finalOutputParams[kFinalOutputParams + 2];
+	uint8_t offsetPageParams[kOffsetPageParams];
 	int insertSelectParam() const { return kNumGlobalParams + numChannels * kNumChannelParams; }
 	int insertLatencyParam() const { return insertSelectParam() + 1; }
 	bool latencyInitialised;
@@ -482,7 +483,7 @@ size_t requiredSram(int)
 size_t requiredDram(int channels)
 {
 	size_t size = 0;
-	size = addStorage<_NT_parameterPage>(size, 5 + channels);
+	size = addStorage<_NT_parameterPage>(size, 6 + channels);
 	size = addStorage<ChannelPage>(size, channels);
 	size = addStorage<ChannelRuntime>(size, channels);
 	size = addStorage<SendState>(size, channels);
@@ -498,7 +499,7 @@ size_t requiredDram(int channels)
 WitchboardAlgorithm::WitchboardAlgorithm(int channels, uint8_t* dram)
 	: numChannels(channels)
 {
-	pageDefs = takeStorage<_NT_parameterPage>(dram, 5 + numChannels);
+	pageDefs = takeStorage<_NT_parameterPage>(dram, 6 + numChannels);
 	channelPages = takeStorage<ChannelPage>(dram, numChannels);
 	runtime = takeStorage<ChannelRuntime>(dram, numChannels);
 	sends = takeStorage<SendState>(dram, numChannels);
@@ -557,10 +558,9 @@ WitchboardAlgorithm::WitchboardAlgorithm(int channels, uint8_t* dram)
 	memset(insertLatencies, 0, sizeof(insertLatencies));
 	insertSelected = insertDisplayed = 0;
 	insertInitialised = insertRestorePending = insertPublishing = false;
-	for (int i = 0; i < kFinalOutputParams; ++i)
-		finalOutputParams[i] = finalOutputPageParams[i];
-	finalOutputParams[kFinalOutputParams] = insertSelectParam();
-	finalOutputParams[kFinalOutputParams + 1] = insertLatencyParam();
+	offsetPageParams[0] = kParamBypassOffset;
+	offsetPageParams[1] = insertSelectParam();
+	offsetPageParams[2] = insertLatencyParam();
 	buildPages();
 	parameterPages = &pages;
 }
@@ -802,10 +802,10 @@ void WitchboardAlgorithm::buildPages()
 
 	pageDefs[page++] = {
 		.name = "Final Outputs",
-		.numParams = kFinalOutputParams + 2,
+		.numParams = kFinalOutputParams,
 		.group = 3,
 		.unused = { 0, 0 },
-		.params = finalOutputParams,
+		.params = finalOutputPageParams,
 	};
 
 	pageDefs[page++] = {
@@ -841,6 +841,13 @@ void WitchboardAlgorithm::buildPages()
 			.params = channelPages[channel],
 		};
 	}
+	pageDefs[page++] = {
+		.name = "Offset",
+		.numParams = kOffsetPageParams,
+		.group = static_cast<uint8_t>(6 + numChannels),
+		.unused = { 0, 0 },
+		.params = offsetPageParams,
+	};
 
 	pages.numPages = page;
 	pages.pages = pageDefs;
