@@ -2,24 +2,15 @@
 
 # WitchboardX
 
-## New feature: shared insert returns
+## New: multiple channels through one insert
 
-WitchboardX supports up to **ten stereo channels**, **six insert routes (A–F)**,
-and **four stereo Send FX paths**.
+Choose an insert slot on each WitchboardX channel as usual. If the selected
+slots point to the same insert route, both channels send audio to its external
+processor. When neither channel uses another insert after it, WitchboardX adds
+the combined return to the Main mix **once**, so it is not doubled.
 
-A conventional channel insert expects one channel to own its return. If several
-channels use the same physical insert and each channel mixes that whole return
-back, the processed audio is multiplied.
-
-WitchboardX detects when channels share an insert bus, sums their audio on its
-send, and mixes the return **once**. This also works when you switch inserts
-while playing.
-
-Once an external processor has combined the channels, its return is one signal
-and cannot be separated back into individual channel returns. The four
-**Send FX** paths are separate from these inserts. If a shared insert return
-feeds a Send FX path, WitchboardX uses the highest contributing send amount
-rather than adding the amounts together.
+If either channel does use another insert afterwards, this version may still
+double the audio.
 
 ## Latency compensation
 
