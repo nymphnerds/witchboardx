@@ -1,24 +1,32 @@
-# The Latency page
+# Latency page guide
 
-The **Latency** page brings four timing controls together. It helps keep the Main and Bypass paths aligned and lets an external insert return line up with the rest of the mix.
+The **Latency** page groups the controls that keep WitchboardX's audio paths in time. It covers sidechain lookahead, the Bypass path, and external **insert** returns. The four **Send FX** returns have no separate offset control.
 
-| Control | What it does |
+| Control | Purpose |
 | --- | --- |
-| **SC Lookahead** | Delays Main audio for sidechain ducking when Sidechain is on. This is the **same setting** shown on the Sidechain/Master page. |
-| **Bypass Offset** | Delays Bypass audio. Changing SC Lookahead normally copies its active delay here so Bypass and Main stay aligned. You can adjust Bypass Offset manually afterward. |
-| **Insert route** | Chooses which physical insert route, A–F, you are editing. |
-| **Insert return offset** | Sets that route's external round-trip delay, from 0.0 to 20.0 ms. Channels sharing the route share this setting. |
+| **SC Lookahead** | Delays Main audio when Sidechain is on. It is the **same parameter** shown on Sidechain/Master, so changing it on either page changes one setting. |
+| **Bypass Offset** | Delays Bypass audio. A change to SC Lookahead copies the active lookahead value here to keep Main and Bypass aligned. You can set a different Bypass delay manually afterward. |
+| **Insert route** | Selects the physical insert route, A–F, whose offset you want to edit. |
+| **Insert return offset** | Describes that route's external round-trip delay, from 0.0 to 20.0 ms. Each route stores its own value. |
 
-## Main and Bypass
+## Independent insert route offsets
 
-Set SC Lookahead to **6.0 ms** with Sidechain on. WitchboardX sets Bypass Offset to **6.0 ms** as well. That keeps audio taking the Bypass path in time with Main. If you then set Bypass Offset to **10.0 ms**, it stays at 10.0 ms as a manual override. The next change to SC Lookahead copies the new active lookahead value to Bypass Offset again. With Sidechain off, the automatic value is 0.0 ms.
+Set each insert route to the round-trip delay of the external processor connected to it. **The routes have independent offset settings.** WitchboardX then uses the largest offset among *active* routes as a common timing reference and delays faster paths by only the difference they need.
 
-The SC Lookahead controls on the two pages are one NT parameter, not two independent lookaheads. Bypass Offset is a separate delay for the Bypass audio path.
+For example, if route A is set to **10 ms** and route B to **6 ms**:
 
-## External inserts
+| Path | Extra delay inside WitchboardX to reach the insert reference |
+| --- | ---: |
+| Route A return | 0 ms |
+| Route B return | 4 ms (`10 − 6`) |
+| Dry audio | 10 ms |
 
-If an iPad or computer returns an insert about **6.0 ms** late, select its **Insert route** and set **Insert return offset** to **6.0 ms**. This is independent of SC Lookahead and Bypass Offset. WitchboardX uses the largest offset among the active insert routes as the common reference and holds faster paths back to match. It cannot make the external return arrive earlier.
+Route B is **not** delayed by 6 ms *plus* 10 ms. Its external round trip accounts for the first 6 ms; WitchboardX adds the remaining 4 ms. If route A becomes inactive, the reference can fall to 6 ms. With one active insert route, that route's return normally needs no extra delay; the dry paths wait for it. An offset cannot make an external return arrive earlier.
 
-If several channels use the same insert route, their audio is combined on its send and its physical return is mixed **once**. Select the same route on each channel so they share both the return and its offset. [Shared insert returns and timing](why-insert-route-offsets.md) explains this in more detail.
+Several channels may use the **same** insert route. They share that route's offset, and WitchboardX mixes its one physical return once. [Shared insert returns and timing](why-insert-route-offsets.md) explains why this matters.
 
-The four **Send FX** returns have no independent offset control in this build.
+## SC Lookahead and Bypass Offset
+
+SC Lookahead is separate from the insert route settings. When Sidechain is on, it delays Main audio before ducking. Changing SC Lookahead to **6.0 ms** copies **6.0 ms** to Bypass Offset, keeping the Main and Bypass paths aligned after insert compensation.
+
+You can then set Bypass Offset to an absolute value, such as **10.0 ms**, if a different Bypass delay is required. That manual value holds until the next SC Lookahead or Sidechain mode change, which copies the active lookahead value again. When Sidechain is off, the automatic Bypass value is **0.0 ms**.
