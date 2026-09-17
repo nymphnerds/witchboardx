@@ -8,6 +8,7 @@ Thumbs.db
 build/
 release/
 tmp/
+tests/
 *.elf
 *.map
 *.o

@@ -97,7 +97,7 @@ inspect: hardware
 
 verify: test inspect
 
-package: verify
+package: inspect
 	OBJECT="$(OUTPUT)" RELEASE_DIR="$(RELEASE_DIR)" bash scripts/package_release.sh
 
 clean:

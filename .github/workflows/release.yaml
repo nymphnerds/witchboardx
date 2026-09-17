@@ -39,7 +39,7 @@ jobs:
           arm-none-eabi-nm --version
           arm-none-eabi-readelf --version
 
-      - name: Test, build, inspect, and package Witchboard
+      - name: Build, inspect, and package Witchboard
         run: |
           make clean
           make package
