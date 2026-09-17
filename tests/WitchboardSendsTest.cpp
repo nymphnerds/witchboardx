@@ -185,14 +185,15 @@ void testInactiveSendBecomesActiveDuringFade()
 void testSendSaveLoadAndPages()
 {
     SendFixture source;
-    bool seen[kMaxParams] = {};
+    int seen[kMaxParams] = {};
     for (unsigned page = 0; page < source.alg->pages.numPages; ++page)
     {
         const auto& p = source.alg->pages.pages[page];
         for (int i = 0; i < p.numParams; ++i)
-        { assert(p.params[i] < kMaxParams); assert(!seen[p.params[i]]); seen[p.params[i]] = true; }
+        { assert(p.params[i] < kMaxParams); ++seen[p.params[i]]; }
     }
-    for (bool b : seen) assert(b); // Every identity exactly once, including Switch fade.
+    for (int i = 0; i < kMaxParams; ++i)
+        assert(seen[i] == (i == kParamSidechainLookahead ? 2 : 1));
     for (int ch = 0; ch < 10; ++ch)
     {
         for (int fx = 0; fx < 4; ++fx) { source.select(ch,fx); source.amount(ch,ch*7+fx*3); }
@@ -225,5 +226,5 @@ int main()
 {
 	testFourStateSendSelector(); testSendEditorAndMidi(); testFourSendAudio();
 	testInactiveSendBecomesActiveDuringFade(); testSendSaveLoadAndPages();
-    printf("PASS: four simultaneous sends/returns, editor, independent/shared CCs, pickup, save/load, unique pages at %.0f Hz\n",double(NT_globals.sampleRate));
+    printf("PASS: four simultaneous sends/returns, editor, independent/shared CCs, pickup, save/load, page identities at %.0f Hz\n",double(NT_globals.sampleRate));
 }

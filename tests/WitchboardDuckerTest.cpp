@@ -146,6 +146,16 @@ void testDelay()
 
 void testAutoFollow()
 {
+ Fixture legacy;
+ legacy.v[kParamSidechainMode]=1;
+ legacy.v[kParamBypassOffset]=0;
+ JsonTape oldTrim;
+ { _NT_jsonStream stream(&oldTrim); stream.openObject();
+   stream.addMemberName("witchboardLatencyTrim"); stream.addNumber(-60);
+   stream.closeObject(); }
+ { _NT_jsonParse parse(&oldTrim,0); assert(deserialise(legacy.alg,parse)); }
+ legacy.tick(); assert(legacy.v[kParamBypassOffset]==60);
+
  Fixture f;
  f.tick();
  const int calls=setterCalls;
@@ -153,14 +163,15 @@ void testAutoFollow()
  parameterChanged(f.alg,kParamSidechainMode);
  f.tick(); assert(f.v[kParamBypassOffset]==60);
  assert(setterCalls==calls+1);
- f.v[kParamBypassOffset]=100; f.tick();
+ f.v[kParamBypassOffset]=100; f.tick(); assert(f.v[kParamBypassOffset]==100);
  f.v[kParamSidechainLookahead]=80; f.tick(); // CV values consumed without callback too
- assert(f.v[kParamBypassOffset]==120);
+ assert(f.v[kParamBypassOffset]==80);
  f.v[kParamBypassOffset]=130; parameterChanged(f.alg,kParamBypassOffset); f.tick();
+ assert(f.v[kParamBypassOffset]==130);
  f.v[kParamSidechainLookahead]=60; parameterChanged(f.alg,kParamSidechainLookahead); f.tick();
- assert(f.v[kParamBypassOffset]==110);
- f.v[kParamSidechainMode]=0; f.tick(); assert(f.v[kParamBypassOffset]==50);
- f.v[kParamSidechainMode]=1; f.tick(); assert(f.v[kParamBypassOffset]==110);
+ assert(f.v[kParamBypassOffset]==60);
+ f.v[kParamSidechainMode]=0; f.tick(); assert(f.v[kParamBypassOffset]==0);
+ f.v[kParamSidechainMode]=1; f.tick(); assert(f.v[kParamBypassOffset]==60);
  for(bool before : {false,true})
  {
   Fixture loaded;
@@ -169,20 +180,19 @@ void testAutoFollow()
   // Model the host restoring every parameter and notifying the plugin.
   for(unsigned i=0;i<loaded.v.size();++i) parameterChanged(loaded.alg,i);
   if(!before) { _NT_jsonParse parse(nullptr,0); assert(deserialise(loaded.alg,parse)); }
-  loaded.tick(); assert(loaded.v[kParamBypassOffset]==110);
+  loaded.tick(); assert(loaded.v[kParamBypassOffset]==60);
   loaded.v[kParamSidechainLookahead]=80; loaded.tick();
-  assert(loaded.v[kParamBypassOffset]==130);
+  assert(loaded.v[kParamBypassOffset]==80);
   // Also exercise deserialising into an instance which has already rendered.
   _NT_jsonParse parse(nullptr,0); assert(deserialise(loaded.alg,parse));
   loaded.v[kParamBypassOffset]=150; loaded.v[kParamSidechainLookahead]=40;
-  loaded.tick(); assert(loaded.v[kParamBypassOffset]==150);
+  loaded.tick(); assert(loaded.v[kParamBypassOffset]==40);
  }
- f.v[kParamBypassOffset]=1000; f.tick();
- f.v[kParamSidechainLookahead]=100; f.tick(); assert(f.v[kParamBypassOffset]==1000);
- f.v[kParamBypassOffset]=0; f.tick();
+ f.v[kParamBypassOffset]=1000; f.tick(); assert(f.v[kParamBypassOffset]==1000);
+ f.v[kParamSidechainLookahead]=100; f.tick(); assert(f.v[kParamBypassOffset]==100);
+ f.v[kParamBypassOffset]=0; f.tick(); assert(f.v[kParamBypassOffset]==0);
  f.v[kParamSidechainMode]=0; f.tick(); assert(f.v[kParamBypassOffset]==0);
- assert(f.alg->manualTrim==-100);
- // A negative trim survives SC OFF, preset save/load, then SC ON.
+ // An SC change copies Lookahead again.
  copyText(f.alg->channelNames[0],kHardwareNameLength,"Kick");
  copyText(f.alg->routeNames[0],kHardwareNameLength,"iPad insert");
  copyText(f.alg->fxNames[1],kHardwareNameLength,"Stereo delay");
@@ -193,23 +203,37 @@ void testAutoFollow()
  restored.v=f.v;
  { _NT_jsonParse parse(&tape,0); assert(deserialise(restored.alg,parse)); }
  restored.tick();
- assert(restored.alg->manualTrim==-100);
  restored.v[kParamSidechainMode]=1; restored.tick();
- assert(restored.v[kParamBypassOffset]==0);
+ assert(restored.v[kParamBypassOffset]==100);
  assert(strcmp(restored.alg->channelNames[0],"Kick")==0);
  assert(strcmp(restored.alg->parameterPages->pages[5].name,"Kick")==0);
  assert(strcmp(restored.alg->routeNames[0],"iPad insert")==0);
  assert(strcmp(restored.alg->fxNames[1],"Stereo delay")==0);
  assert(strcmp(restored.alg->slotNames[1][2],"Pedal")==0);
- // Upper clamp also preserves trim and is reversible.
+ // Manual bypass values are absolute until the next SC change.
  restored.v[kParamBypassOffset]=990; restored.tick();
+ assert(restored.v[kParamBypassOffset]==990);
  restored.v[kParamSidechainLookahead]=0; restored.tick();
- assert(restored.v[kParamBypassOffset]==890);
+ assert(restored.v[kParamBypassOffset]==0);
  restored.v[kParamBypassOffset]=1000; restored.tick();
+ assert(restored.v[kParamBypassOffset]==1000);
  restored.v[kParamSidechainLookahead]=100; restored.tick();
- assert(restored.v[kParamBypassOffset]==1000);
+ assert(restored.v[kParamBypassOffset]==100);
  restored.v[kParamSidechainLookahead]=0; restored.tick();
- assert(restored.v[kParamBypassOffset]==1000);
+ assert(restored.v[kParamBypassOffset]==0);
+
+ Fixture persist;
+ persist.v[kParamSidechainMode]=1; persist.tick();
+ persist.v[kParamBypassOffset]=200; persist.tick();
+ JsonTape manualTape;
+ { _NT_jsonStream stream(&manualTape); stream.openObject();
+   serialise(persist.alg,stream); stream.closeObject(); }
+ Fixture manualLoaded;
+ manualLoaded.v=persist.v;
+ { _NT_jsonParse parse(&manualTape,0); assert(deserialise(manualLoaded.alg,parse)); }
+ manualLoaded.tick(); assert(manualLoaded.v[kParamBypassOffset]==200);
+ manualLoaded.v[kParamSidechainLookahead]=80; manualLoaded.tick();
+ assert(manualLoaded.v[kParamBypassOffset]==80);
 
 }
 
@@ -263,7 +287,8 @@ void testRouting()
  assert(f.alg->sidechain.remaining==millisecondsToSamples(envLengthFromNormalized(0.486f),rate)-3);
  assertBus(buses,13,0);
  // Manual bypass delay still works with sidechain off, including 100 ms max.
- Fixture manual; manual.v[kParamBypassOffset]=1000;
+ Fixture manual; manual.tick(); manual.v[kParamBypassOffset]=1000;
+ for(int i=0;i<(millisecondsToSamples(5,rate)+8)/4;++i) manual.tick();
  const int n=millisecondsToSamples(100,rate);
  for(int block=0;block<(n+8)/4;++block)
  {

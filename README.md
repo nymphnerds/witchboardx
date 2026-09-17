@@ -378,27 +378,25 @@ There are no Attack/Hold/Release/Makeup, Gate/Audio modes, or breakpoints.
 
 ### Output / latency alignment — `Bypass Offset`
 
-`Bypass Offset` is on the final Offset page with Insert route and Insert return
-offset. SC Lookahead stays on Sidechain/Master.
+The final Latency page shows SC Lookahead, Bypass Offset, Insert route, and
+Insert return offset. SC Lookahead is the same parameter shown on Sidechain/Master.
 
 | Control | Range | Initial value |
 | --- | --- | --- |
 | Bypass Offset | 0–100 ms, 0.1 ms steps | 0 ms with SC Off |
 
-Lookahead delays Main audio before the VCA; the trigger stays immediate.
-Bypass Offset is the effective, visible and saved delay in every master mode.
-With SC On and Lookahead 6 ms it follows to 6 ms automatically. Set it to 10 ms
-for a +4 ms manual trim; increasing Lookahead to 8 ms then displays 12 ms.
-Switching SC Off removes its automatic contribution but retains the manual trim.
-MIDI/CV Lookahead updates follow the same audio-block logic as front-panel edits.
-A simultaneous direct Bypass edit is interpreted against the previous automatic
-contribution, then the new contribution is applied.
+Lookahead delays Main audio before the VCA; the trigger stays immediate. When
+SC is on, changing SC Lookahead copies its value to Bypass Offset so the two
+audio paths align. For example, 6 ms Lookahead sets Bypass Offset to 6 ms.
+You can then set Bypass Offset to an absolute manual value, such as 10 ms.
+It stays there until the next SC Lookahead or Sidechain mode change, which
+copies the active lookahead again. With SC off, the automatic value is 0 ms.
+MIDI/CV Lookahead changes use the same rule. A manual override saves with the
+preset; older hidden trim metadata is ignored.
 
-Physical delay clamps to 0–100 ms. Hidden trim metadata preserves manual intent
-at either limit, including across preset save/load; a direct Bypass Offset edit
-replaces that trim. A positive-only Bypass delay cannot advance a late Bypass
-branch. Insert return offset aligns an external insert route with the rest of
-the mix.
+Physical Bypass delay ranges from 0–100 ms. Insert return offset aligns an
+external insert route with the rest of the mix; it is a separate control.
+See [the Latency page guide](docs/latency-page-guide.md) for a setup example.
 
 Both delays crossfade old/new taps over 5 ms. Rapid requests finish the current
 fade, then fade toward the latest target, so settling can take up to 10 ms.
@@ -408,7 +406,7 @@ At SC Off and Bypass Offset zero there is no new steady-state latency.
 
 ### Insert return alignment — PC or iPad inserts
 
-If an external insert route returns late, open the final Offset page, select
+If an external insert route returns late, open the final Latency page, select
 its physical **Insert route** (A–F), and set **Insert return offset** to its
 measured roundtrip latency, from 0.0 to 20.0 ms in 0.1 ms steps. For example,
 if a Channel 2 iPad insert uses route E and returns 12 ms late, select E and

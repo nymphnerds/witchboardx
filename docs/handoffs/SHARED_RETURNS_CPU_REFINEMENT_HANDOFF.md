@@ -2,6 +2,8 @@
 
 **Date:** 2026-09-16. **Working branch:** `witchboardx-shared-returns` at `cdab0dde46251df60703ab735ae8975b2f4643da` in `/home/nymph/DistingNT/WitchboardX-shared-returns`.
 
+**Later change:** The final page is now **Latency**, with SC Lookahead shown there and on Sidechain/Master as one parameter. Bypass Offset copies the active lookahead when it changes; a subsequent manual value holds until the next lookahead or sidechain mode change. Host tests pass, but the newer object has not yet been checked for CPU or sustained audio on the NT. The `cdab0dd` object below remains the hardware-measured reference.
+
 ## Current tested candidate
 
 - User-reported disting NT setup: 44.1 kHz, Poly Res enabled, ten-channel WitchboardX preset, one stereo iPad insert on Drums ST / route E. The saved preset currently has an 18.2 ms (`182` tenths) return offset on route E.
@@ -13,8 +15,8 @@
 ## Architecture and controls to preserve
 
 - This branch has ten channels, six physical **insert routes**, and four **send FX** paths. Do not conflate inserts with send FX returns.
-- The old per-channel negative offset control was removed. **Bypass Offset**, **Insert route**, and **Insert return offset** are on the final Offset page. There is no send FX return offset in this version.
-- **SC Lookahead remains in Sidechain/Master.** These are separate user controls feeding one coordinated timing calculation. Changing an insert return offset must not change the SC Lookahead parameter.
+- The old per-channel negative offset control was removed. The final **Latency** page shows **SC Lookahead**, **Bypass Offset**, **Insert route**, and **Insert return offset**. SC Lookahead is also on Sidechain/Master; both page entries use one parameter. There is no send FX return offset in this version.
+- Changing SC Lookahead copies its active delay to Bypass Offset. A subsequent manual Bypass edit is absolute until the next lookahead or sidechain mode change. Changing an insert return offset must not change SC Lookahead. See [the Latency page guide](../latency-page-guide.md).
 - The highest offset among active insert routes sets the common insert reference. Dry Main, dry Bypass, and the active SC key follow that reference; each deferred insert return gets `reference - its route offset`. Main then receives its configured SC lookahead; Bypass receives its configured Bypass offset/auto-follow timing. This keeps the relative SC lookahead constant when an insert offset changes.
 - A shared physical insert return is read once. Its contribution to a send FX path uses the highest wet amount among contributing channels. No audio-loop allocation.
 - Serial Insert 1 + Insert 2 paths with different external latencies remain insufficiently device-validated; the route offset is treated as effective latency of the final return.

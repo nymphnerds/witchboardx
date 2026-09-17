@@ -1,12 +1,14 @@
 # Insert return timing
 
+For the four controls on the final page, see [The Latency page](latency-page-guide.md).
+
 For a user-facing explanation and an iPad example, see [Shared insert returns and timing](why-insert-route-offsets.md).
 
 This branch keeps three timing controls:
 
-- **SC Lookahead** stays on **Sidechain/Master**.
-- **Bypass Offset** is on the final **Offset** page and retains its SC auto-follow behavior.
-- **Insert route** and **Insert return offset** are on the final **Offset** page. Select one of the six physical insert routes, then set its roundtrip offset from 0.0 to 20.0 ms. The six values save in the NT preset.
+- **SC Lookahead** appears on both **Sidechain/Master** and the final **Latency** page. Both views edit the same parameter.
+- **Bypass Offset** is on **Latency**. Changing SC Lookahead copies its active delay to Bypass Offset; a later manual Bypass edit holds until the next lookahead or sidechain mode change.
+- **Insert route** and **Insert return offset** are on **Latency**. Select one of the six physical insert routes, then set its roundtrip offset from 0.0 to 20.0 ms. The six values save in the NT preset.
 
 There is no per-channel offset control. FX sends and FX returns have no independent offset control in this build. The four Send FX systems still route normally.
 

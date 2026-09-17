@@ -16,9 +16,9 @@ The iPad's return is already a combined signal; it cannot be separated back into
 
 ## Keeping the return in time
 
-An iPad or computer takes time to process and return audio. Without compensation, its processed signal can arrive behind the channels that stayed inside WitchboardX. On the final **Offset** page, select the **Insert route** and set **Insert return offset** to that route's round-trip delay. All channels using that route share the same setting.
+An iPad or computer takes time to process and return audio. Without compensation, its processed signal can arrive behind the channels that stayed inside WitchboardX. On the final **Latency** page, select the **Insert route** and set **Insert return offset** to that route's round-trip delay. All channels using that route share the same setting.
 
-WitchboardX takes the largest offset among active insert routes as its timing reference and delays faster paths to line them up with the slowest return. It cannot make an external return arrive earlier. **Bypass Offset** is on the same page; **SC Lookahead** remains with the sidechain settings. Send FX returns have no separate offset control in this build.
+WitchboardX takes the largest offset among active insert routes as its timing reference and delays faster paths to line them up with the slowest return. It cannot make an external return arrive earlier. **SC Lookahead** appears on both the sidechain and Latency pages; **Bypass Offset** is beside it on Latency. Send FX returns have no separate offset control in this build.
 
 In my setup, an insert bus runs through a stack of iPad effects. A **6.0 ms insert return offset** brings it into line with the dry mix; to my ears, it is rock tight and solid.
 

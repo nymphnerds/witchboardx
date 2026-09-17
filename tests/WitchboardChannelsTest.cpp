@@ -54,13 +54,14 @@ void testPagesAndDefaults()
 	const int expectedOutputs[] = {37,38,39,40};
 	assert(strcmp(outputs.name, "Final Outputs") == 0 && outputs.numParams == 4);
 	for (int i = 0; i < 4; ++i) assert(outputs.params[i] == expectedOutputs[i]);
-	const auto& offset = f.algorithm->parameterPages->pages[15];
-	const int expectedOffset[] = {88,239,240};
-	assert(strcmp(offset.name, "Offset") == 0 && offset.numParams == 3);
-	for (int i = 0; i < 3; ++i) assert(offset.params[i] == expectedOffset[i]);
+	const auto& latency = f.algorithm->parameterPages->pages[15];
+	const int expectedLatency[] = {73,88,239,240};
+	assert(strcmp(latency.name, "Latency") == 0 && latency.numParams == 4);
+	for (int i = 0; i < 4; ++i) assert(latency.params[i] == expectedLatency[i]);
 	const auto& master = f.algorithm->parameterPages->pages[4];
 	assert(master.numParams == 18);
 	for (int i = 0; i < 7; ++i) assert(master.params[i] == 70+i);
+	assert(master.params[3] == latency.params[0]); // One SC parameter on both pages.
 	for (int i = 0; i < master.numParams; ++i) assert(master.params[i] != 88);
 	assert(f.values[kParamSidechainMode] == 0 && f.values[kParamSidechainKeyInput] == 0);
 	assert(f.values[kParamSidechainDepth] == 69);

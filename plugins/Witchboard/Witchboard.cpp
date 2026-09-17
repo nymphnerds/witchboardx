@@ -135,7 +135,7 @@ enum ChannelParam
 constexpr int kGlobalPageParams = 2;
 constexpr int kRouteSetupParams = kParamMainL - 1;
 constexpr int kFinalOutputParams = kParamFx1L - kParamMainL;
-constexpr int kOffsetPageParams = 3;
+constexpr int kLatencyPageParams = 4;
 constexpr int kFxSetupParams = kNumFx * kNumFxParams;
 constexpr int kMasterPageParams = kNumGlobalParams - kParamSidechainMode - 1;
 constexpr int kMaxParams = kNumGlobalParams + kMaxChannels * kNumChannelParams + 2;
@@ -438,12 +438,12 @@ struct WitchboardAlgorithm : public _NT_algorithm
 	int16_t insertLatencies[kNumRoutes]; // tenths of a millisecond
 	int insertSelected, insertDisplayed;
 	bool insertInitialised, insertRestorePending, insertPublishing;
-	uint8_t offsetPageParams[kOffsetPageParams];
+	uint8_t latencyPageParams[kLatencyPageParams];
 	int insertSelectParam() const { return kNumGlobalParams + numChannels * kNumChannelParams; }
 	int insertLatencyParam() const { return insertSelectParam() + 1; }
 	bool latencyInitialised;
-	int previousAuto, previousEffective, manualTrim;
-	bool savedTrim;
+	int previousAuto, previousEffective, previousPublic, manualBypass;
+	bool manualBypassActive;
 	int cachedLengthControl, cachedCurveControl, envSamples;
 	float cachedSampleRate, curveBeta;
 	SmoothedValue masterGain;
@@ -522,8 +522,8 @@ WitchboardAlgorithm::WitchboardAlgorithm(int channels, uint8_t* dram)
 	memset(mainDelay.data, 0, sizeof(float) * 2 * kMainDelayCapacity);
 	memset(bypassDelay.data, 0, sizeof(float) * 2 * kBypassDelayCapacity);
 	latencyInitialised = false;
-	previousAuto = previousEffective = manualTrim = 0;
-	savedTrim = false;
+	previousAuto = previousEffective = previousPublic = manualBypass = 0;
+	manualBypassActive = false;
 	cachedLengthControl = cachedCurveControl = -10000;
 	cachedSampleRate = curveBeta = 0;
 	envSamples = 1;
@@ -558,9 +558,10 @@ WitchboardAlgorithm::WitchboardAlgorithm(int channels, uint8_t* dram)
 	memset(insertLatencies, 0, sizeof(insertLatencies));
 	insertSelected = insertDisplayed = 0;
 	insertInitialised = insertRestorePending = insertPublishing = false;
-	offsetPageParams[0] = kParamBypassOffset;
-	offsetPageParams[1] = insertSelectParam();
-	offsetPageParams[2] = insertLatencyParam();
+	latencyPageParams[0] = kParamSidechainLookahead;
+	latencyPageParams[1] = kParamBypassOffset;
+	latencyPageParams[2] = insertSelectParam();
+	latencyPageParams[3] = insertLatencyParam();
 	buildPages();
 	parameterPages = &pages;
 }
@@ -842,11 +843,11 @@ void WitchboardAlgorithm::buildPages()
 		};
 	}
 	pageDefs[page++] = {
-		.name = "Offset",
-		.numParams = kOffsetPageParams,
+		.name = "Latency",
+		.numParams = kLatencyPageParams,
 		.group = static_cast<uint8_t>(6 + numChannels),
 		.unused = { 0, 0 },
-		.params = offsetPageParams,
+		.params = latencyPageParams,
 	};
 
 	pages.numPages = page;
@@ -1139,20 +1140,23 @@ int followBypassOffset(WitchboardAlgorithm* self)
 	const int activeAuto = self->v[kParamSidechainMode]
 		? clampInt(self->v[kParamSidechainLookahead], 0, 100) : 0;
 	const int publicValue = clampInt(self->v[kParamBypassOffset], 0, 1000);
-	// First audio block after loading: saved effective delay is authoritative.
-	// Optional trim metadata preserves intent when physical delay was clamped.
-	if (!self->latencyInitialised)
+	// A lookahead change copies its active delay to Bypass. A later direct Bypass
+	// edit is an absolute override until the next lookahead/SC mode change.
+	if (self->latencyInitialised)
 	{
-		if (!self->savedTrim || clampInt(self->manualTrim + activeAuto, 0, 1000) != publicValue)
-			self->manualTrim = publicValue - activeAuto;
-		self->savedTrim = false;
+		if (activeAuto != self->previousAuto)
+			self->manualBypassActive = false;
+		else if (publicValue != self->previousPublic
+			&& publicValue != self->previousEffective)
+		{
+			self->manualBypass = publicValue;
+			self->manualBypassActive = true;
+		}
 	}
-	else if (publicValue != self->previousEffective)
-		self->manualTrim = publicValue - self->previousAuto;
-	const int effective = clampInt(self->manualTrim + activeAuto, 0, 1000);
-	// Update state before the API setter, which may synchronously notify us.
+	const int effective = self->manualBypassActive ? self->manualBypass : activeAuto;
 	self->previousAuto = activeAuto;
 	self->previousEffective = effective;
+	self->previousPublic = publicValue;
 	self->latencyInitialised = true;
 	if (effective != publicValue)
 	{
@@ -2265,12 +2269,11 @@ void serialise(_NT_algorithm* algorithm, _NT_jsonStream& stream)
 		stream.closeArray();
 	}
 	stream.closeArray();
-	// The NT host stores public values/mappings. Trim metadata makes clamps reversible.
-	const int autoValue = self->v[kParamSidechainMode] ? self->v[kParamSidechainLookahead] : 0;
-	const int trim = self->latencyInitialised && self->v[kParamBypassOffset] == self->previousEffective
-		? self->manualTrim : self->v[kParamBypassOffset] - autoValue;
-	stream.addMemberName("witchboardLatencyTrim");
-	stream.addNumber(trim);
+	if (self->manualBypassActive)
+	{
+		stream.addMemberName("witchboardManualBypassOffset");
+		stream.addNumber(self->manualBypass);
+	}
 
 	stream.addMemberName("witchboardNames");
 	stream.openObject();
@@ -2395,7 +2398,7 @@ bool deserialise(_NT_algorithm* algorithm, _NT_jsonParse& parse)
 {
 	WitchboardAlgorithm* self = static_cast<WitchboardAlgorithm*>(algorithm);
 	self->latencyInitialised = false;
-	self->savedTrim = false;
+	self->manualBypassActive = false;
 	memset(self->insertLatencies, 0, sizeof(self->insertLatencies));
 	self->insertRestorePending = true;
 	int members = 0;
@@ -2429,9 +2432,15 @@ bool deserialise(_NT_algorithm* algorithm, _NT_jsonParse& parse)
 		}
 		if (parse.matchName("witchboardLatencyTrim"))
 		{
-			if (!parse.number(self->manualTrim)) return false;
-			self->manualTrim = clampInt(self->manualTrim, -100, 1000);
-			self->savedTrim = true;
+			int ignored;
+			if (!parse.number(ignored)) return false;
+			continue;
+		}
+		if (parse.matchName("witchboardManualBypassOffset"))
+		{
+			if (!parse.number(self->manualBypass)
+				|| self->manualBypass < 0 || self->manualBypass > 1000) return false;
+			self->manualBypassActive = true;
 			continue;
 		}
 		if (!parse.matchName("witchboardNames"))
